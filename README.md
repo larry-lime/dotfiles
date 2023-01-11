@@ -20,6 +20,13 @@
     ```shell
     sudo apt install fzf bat && cargo install fd-find ripgrep exa
     ```
+6. Build Neovim
+    ```shell
+    sudo apt-get install ninja-build gettext libtool libtool-bin autoconf automake cmake g++ pkg-config unzip curl doxygen
+    git clone https://github.com/neovim/neovim
+    cd neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
+    sudo make install
+    ```
 
 ## Installation
 1. Clone the repository
