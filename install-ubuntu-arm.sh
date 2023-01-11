@@ -30,7 +30,7 @@ git clone https://github.com/tmux-plugins/tpm ~/.dotfiles/tmux/.tmux/plugins/tpm
 # Creating Symlinks for files
 ln -s ~/.dotfiles/.fzf.zsh ~/.fzf.zsh
 ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
-rm ~/.zshenv && ln -s ~/.dotfiles/zshenv ~/.zshenv
+rm ~/.zshenv && ln -s ~/.dotfiles/.zshenv ~/.zshenv
 
 # Creating Symlinks for directories
 ln -s ~/.dotfiles/.local/bin ~/.local/bin
@@ -39,10 +39,3 @@ ln -s ~/.dotfiles/nvim ~/.config/nvim
 ln -s ~/.dotfiles/tmux ~/.config/tmux
 ln -s ~/.dotfiles/awesome ~/.config/awesome
 rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
-
-# Building Tmux
-sudo apt install libevent-dev libncurses5-dev libncursesw5-dev
-git clone https://github.com/tmux/tmux.git ~/Builds/tmux
-cd ~/Builds/tmux
-sh autogen.sh
-./configure && make
