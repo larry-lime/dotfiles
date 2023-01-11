@@ -18,7 +18,7 @@
     Follow instructions [here](https://github.com/nodesource/distributions/blob/master/README.md#debinstall) 
 5. Install Terminal Tools
     ```shell
-    sudo apt install fzf bat && cargo 
+    sudo apt install fzf bat && cargo install fd-find ripgrep exa
     ```
 
 ## Installation
