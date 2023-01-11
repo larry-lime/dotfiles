@@ -20,7 +20,7 @@ require("awful.hotkeys_popup.keys")
 
 -- Load Debian menu entries
 local debian = require("debian.menu")
-local has_fdo, freedesktop = pcall(require, "freedesktop_old")
+local has_fdo, freedesktop = pcall(require, "awesome-freedesktop")
 
 -- Custom Widgets
 local volume_widget = require('awesome-wm-widgets.volume-widget.volume')
