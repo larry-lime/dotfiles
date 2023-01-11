@@ -1,9 +1,14 @@
 # Dotfiles Repo
 
 ## Installation
+1. Install Libraries
 ```shell
-git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ~/.dotfiles/install-ubuntu-arm.sh
+sudo apt install xinit awesome kitty xterm firefox dmenu zsh fzf bat
 ```
+2. Install Configurations
+    ```shell
+    git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ~/.dotfiles/install-ubuntu-arm.sh
+    ```
 <!-- ## Ubuntu Installation -->
 <!-- 1. Install Essential Packages -->
 <!--     ```shell -->
