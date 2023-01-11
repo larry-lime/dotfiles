@@ -39,3 +39,5 @@ ln -s ~/.dotfiles/nvim ~/.config/nvim
 ln -s ~/.dotfiles/tmux ~/.config/tmux
 ln -s ~/.dotfiles/awesome ~/.config/awesome
 rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
+
+cd ~ && mkdir Projects Documents Downloads Github-Repos Work
