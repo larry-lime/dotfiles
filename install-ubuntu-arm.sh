@@ -1,3 +1,6 @@
+# Install Essential Tools
+sudo apt update
+sudo dmenu zsh fzf bat gh 
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 

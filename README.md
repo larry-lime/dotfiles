@@ -4,7 +4,7 @@
 1. Install Libraries
 ```shell
 sudo apt update
-sudo apt install xinit awesome kitty xterm firefox dmenu zsh fzf bat
+sudo apt install xinit xdg-utils awesome kitty xterm firefox xdg-utils
 ```
 2. Install Configurations
     ```shell
