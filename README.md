@@ -4,9 +4,16 @@
 1. Install Libraries
 ```shell
 sudo apt update
-sudo apt install xinit xdg-utils awesome kitty xterm firefox xdg-utils
+sudo apt install curl git htop
+sudo apt install gnome-tweaks gnome-shell-extensions
 ```
 2. Install Configurations
     ```shell
-    git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ~/.dotfiles/install-ubuntu-arm.sh
+    git clone --recurse-submodules https://github.com/larry-lime/dotfiles
+    cd ~/.dotfiles
+    ./install.sh
     ```
+## Additional Apps
+```shell
+sudo snap install lazygit
+```
