@@ -3,7 +3,8 @@
 ## Ubuntu Installation
 1. Install Essential Packages
     ```shell
-    sudo apt install awesome xterm kitty xinit firefox
+    sudo apt install xinit awesome kitty xterm firefox dmenu zsh fzf bat
+    startx
     ```
 2. Change default shell to Z-Shell
     ```shell
@@ -15,10 +16,14 @@
     ```
     Follow instructions [here](https://www.rust-lang.org/tools/install) 
 4. Install Node
+    ```shell
+    curl -fsSL https://deb.nodesource.com/setup_19.x | sudo -E bash - &&\
+    sudo apt-get install -y nodejs
+    ```
     Follow instructions [here](https://github.com/nodesource/distributions/blob/master/README.md#debinstall) 
 5. Install Terminal Tools
     ```shell
-    sudo apt install fzf bat && cargo install fd-find ripgrep exa
+    cargo install fd-find ripgrep exa
     ```
 6. Build Neovim
     ```shell
@@ -31,7 +36,7 @@
 ## Installation
 1. Clone the repository
     ```shell
-    git clone --recurse-submodules <github-repo-url>
+    git clone --recurse-submodules https://github.com/larry-lime/dotfiles
     ```
 2. *Run the install script
 
