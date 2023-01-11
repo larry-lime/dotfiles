@@ -34,17 +34,6 @@
     ```
 
 ## Installation
-1. Clone the repository
-    ```shell
-    git clone --recurse-submodules https://github.com/larry-lime/dotfiles
-    ```
-2. *Run the install script
-
-## Create Symlinks
-ln -s ~/.dotfiles/.local/bin/* ~/.local/bin
-ln -s ~/.dotfiles/zsh ~/.local/bin
-ln -s ~/.dotfiles/nvim ~/.config/nvim
-ln -s ~/.dotfiles/tmux ~/.config/zsh
-ln -s ~/.dotfiles/awesome ~/.config/awesome
-ln -s ~/.dotfiles/kitty/* ~/.config/kitty
-...
+```shell
+git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ./install-ubuntu-arm.sh
+```

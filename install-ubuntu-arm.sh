@@ -1,3 +1,16 @@
+# Creating Symlinks for files
+ln -s ~/.dotfiles/.fzf.zsh ~/.fzf.zsh
+ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
+rm .zshenv && ln -s ~/.zshenv ~/
+
+# Creating Symlinks for directories
+ln -s ~/.dotfiles/.local/bin ~/.local/bin
+ln -s ~/.dotfiles/zsh ~/.config/zsh
+ln -s ~/.dotfiles/nvim ~/.config/nvim
+ln -s ~/.dotfiles/tmux ~/.config/tmux
+ln -s ~/.dotfiles/awesome ~/.config/awesome
+rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
+
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 
@@ -17,21 +30,6 @@ git clone https://github.com/neovim/neovim
 cd neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
 sudo make install
 
-# Install Configurations
-git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles
-
-# Creating Symlinks for files
-ln -s ~/.dotfiles/.fzf.zsh ~/.fzf.zsh
-ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
-rm .zshenv && ln -s ~/.zshenv ~/
-
-# Creating Symlinks for directories
-ln -s ~/.dotfiles/.local/bin ~/.local/bin
-ln -s ~/.dotfiles/zsh ~/.config/zsh
-ln -s ~/.dotfiles/nvim ~/.config/nvim
-ln -s ~/.dotfiles/tmux ~/.config/tmux
-ln -s ~/.dotfiles/awesome ~/.config/awesome
-rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
 
 # Source Z-Shell
 source ~/.config/zsh/.zshrc
