@@ -3,6 +3,7 @@
 ## Installation
 1. Install Libraries
 ```shell
+sudo apt update
 sudo apt install xinit awesome kitty xterm firefox dmenu zsh fzf bat
 ```
 2. Install Configurations

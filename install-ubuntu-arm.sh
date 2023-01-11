@@ -1,4 +1,3 @@
-
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 
@@ -16,8 +15,9 @@ cargo install fd-find ripgrep exa
 sudo apt-get install build-essential ninja-build gettext libtool libtool-bin autoconf automake cmake g++ pkg-config unzip curl doxygen
 
 # Check if Builds directory exists. If it doesn't make it and install neovim there
-git clone https://github.com/neovim/neovim
-cd neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
+mkdir ~/Builds
+git clone https://github.com/neovim/neovim ~/Builds/neovim
+cd ~/Builds/neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
 sudo make install
 
 # Source Z-Shell
@@ -39,3 +39,10 @@ ln -s ~/.dotfiles/nvim ~/.config/nvim
 ln -s ~/.dotfiles/tmux ~/.config/tmux
 ln -s ~/.dotfiles/awesome ~/.config/awesome
 rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
+
+# Building Tmux
+sudo apt install libevent-dev libncurses5-dev libncursesw5-dev
+git clone https://github.com/tmux/tmux.git ~/Builds/tmux
+cd ~/Builds/tmux
+sh autogen.sh
+./configure && make
