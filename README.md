@@ -2,7 +2,7 @@
 
 ## Installation
 ```shell
-git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ./install-ubuntu-arm.sh
+git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ~/.dotfiles/install-ubuntu-arm.sh
 ```
 <!-- ## Ubuntu Installation -->
 <!-- 1. Install Essential Packages -->
