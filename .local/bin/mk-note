@@ -1,0 +1,43 @@
+#!/bin/zsh
+
+CURRENT_YEAR="$(date +%Y)"
+CURRENT_MONTH="$(date +%B)"
+CURRENT_WEEK="$(date +%V)"
+
+NOTE_DIR="$HOME/Notes"
+YEAR_DIR="$HOME/Notes/$CURRENT_YEAR-notes"
+MONTH_DIR="$YEAR_DIR/$CURRENT_MONTH-$CURRENT_YEAR"
+WEEK_DIR="$MONTH_DIR/week-$CURRENT_WEEK"
+NOTEFILE="$WEEK_DIR/$(date +%A-%b-%d).md"
+
+if [[ ! -d $NOTE_DIR ]]; then
+  mkdir "$NOTE_DIR"
+fi
+
+if [[ ! -d $YEAR_DIR ]]; then
+  mkdir "$YEAR_DIR"
+fi
+
+if [[ ! -d $MONTH_DIR ]]; then
+  mkdir $MONTH_DIR
+fi
+
+if [[ ! -d $WEEK_DIR ]]; then
+  mkdir $WEEK_DIR
+fi
+
+if [[ ! -f $NOTEFILE ]]; then
+  echo "# Notes for $(date +'%A %B %d, %Y')" > $NOTEFILE
+fi
+
+cd $WEEK_DIR
+$EDITOR $NOTEFILE \
+  -c "silent! ASToggle" \
+  -c "nnoremap <silent> <C-c> <cmd>q!<CR>" \
+  -c "norm Go" \
+  -c "norm Go## $(date +'%I:%M %p')" \
+  -c "norm G2o" \
+  -c "nnoremap <silent> q <cmd>wq<CR>" \
+  -c "set showtabline=0 | map j gj | map k gk" \
+  -c "set wrap | set linebreak | set breakindent" \
+  -c "norm zz"

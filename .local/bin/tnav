@@ -1,0 +1,308 @@
+#!/bin/zsh
+
+#!/usr/bin/zsh
+
+DIR_1=$HOME/Projects
+DIR_2=$HOME/.dotfiles
+# DIR_3=$HOME/Classes
+DIR_4=$HOME/.local/bin
+DIR_5=$HOME/Documents
+DIR_6=$HOME/Downloads
+DIR_7=$HOME/Github-Repos
+DIR_8=$HOME/Research
+DIR_9=$HOME/Work
+
+# Add your own project directory paths
+if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
+  cd $HOME
+  OUTPUT=$(fd . $DIR_1 $DIR_2 $DIR_3 $DIR_4 $DIR_5 $DIR_6 $DIR_7 $DIR_8 $DIR_9\
+    | fzf\
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --preview '
+      if [ -d {} ]; then
+        exa -T -L 2 --icons --group-directories-first -I "node_modules" --git-ignore {};
+      else
+        bat --style=numbers --color=always --line-range :500 {};
+      fi'\
+    | xargs echo)
+
+elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
+  OUTPUT=$(fd . $(pwd) \
+    | fzf\
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --preview "
+      if [ -d {} ]; then
+        exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
+      else
+        bat --style=numbers --color=always --line-range :500 {};
+      fi"\
+    | xargs echo)
+
+else # Argument passed is a file or directory path
+  OUTPUT=$(fd . ${@:$#} \
+    | fzf\
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --preview "
+      if [ -d {} ]; then
+        exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
+      else
+        bat --style=numbers --color=always --line-range :500 {};
+      fi"\
+    | xargs echo) # Simply add the other part of the string to the preview
+fi
+
+read -r KEYPRESS BASE_PATH <<< "${OUTPUT}"
+
+if [ -z $BASE_PATH ]; then
+  if [[ ! "$(pwd)" = $HOME ]]; then
+    cd $HOME
+  fi
+  return
+fi
+
+BASE_NAME=$(basename $BASE_PATH)
+PARENT_PATH=$(dirname $BASE_PATH)
+PARENT_NAME=$(basename $PARENT_PATH | tr -d '.')
+PATH_IS_DIR=false
+PATH_IS_FILE=false
+PATH_IS_CONFIG=false
+SESSION_IS_RUNNING=false
+START_TMUX=false
+
+if [[ "$1" = "--tmux" ]]; then
+  RUN_TMUX=true
+else
+  RUN_TMUX=false
+fi
+
+if [[ -z "$TMUX" ]] && [[ -z $@ ]]; then
+  RUN_TMUX=true
+  START_TMUX=true
+fi
+
+start_new_session ()
+{
+  if [[ "$START_TMUX" = true ]]; then
+    tmux start-server
+  fi
+
+  if [[ "$PATH_IS_DIR" = true ]]; then
+    if [[ "$BASE_NAME" = "zsh" ]] || [[ "$BASE_NAME" = "nvim" ]] || [[ "$BASE_NAME" = "tmux" ]]; then
+      PATH_IS_CONFIG=true
+      tmux new-session -ds "config" -c $BASE_PATH
+    else
+      tmux new-session -ds $BASE_NAME -c $BASE_PATH
+    fi
+  elif [[ "$PATH_IS_FILE" = true ]]; then
+    tmux new-session -ds $PARENT_NAME -c $PARENT_PATH
+  fi
+  SESSION_IS_RUNNING=true
+}
+
+jump_to_open_session ()
+{
+  if [[ -z "$TMUX" ]]; then
+    tmux attach
+  else
+    if [[ "$PATH_IS_DIR" = true ]]; then
+      if [[ "$PATH_IS_CONFIG" = false ]]; then
+        tmux switch-client -t $BASE_NAME
+      else
+        tmux switch-client -t "config"
+      fi
+    elif [[ "$PATH_IS_FILE" = true ]]; then
+      tmux switch-client -t $PARENT_NAME
+    fi
+  fi
+
+}
+
+recursive_search ()
+{
+  if [[ $PATH_IS_DIR ]]; then
+    search_path="$BASE_PATH"
+    relative_path="$BASE_NAME"
+  elif [[ $PATH_IS_FILE ]]; then
+    search_path="$PARENT_PATH"
+    relative_path="$PARENT_NAME"
+  fi
+
+  cd $(dirname $search_path)
+
+  if [[ "$RUN_TMUX" = true ]]; then
+    source $HOME/.local/bin/tnav --tmux $relative_path
+  else
+    source $HOME/.local/bin/tnav $relative_path
+  fi
+}
+
+open_directory ()
+{
+  if [ "$KEYPRESS" = "enter" ]; then
+    if [[ "$RUN_TMUX" = true ]]; then
+      start_new_session
+      if [[ "$PATH_IS_CONFIG" = true ]]; then
+        tmux send-keys -t config.0 "$EDITOR" ENTER
+      else
+        tmux send-keys -t $BASE_NAME.0 "$EDITOR" ENTER
+      fi
+      jump_to_open_session
+    else
+      cd $BASE_PATH
+      $EDITOR
+    fi
+  elif [[ "$KEYPRESS" = "alt-enter" ]]; then
+    if [[ "$RUN_TMUX" = true ]]; then
+      start_new_session
+      jump_to_open_session
+    else
+      cd $BASE_PATH
+    fi
+  elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
+    grep_search
+  elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
+    recursive_search
+  else
+    return
+  fi
+}
+
+open_file ()
+{
+  if [ "$KEYPRESS" = "enter" ]; then
+    if [[ "$RUN_TMUX" = true ]]; then
+      if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
+        open "$BASE_PATH"
+        return
+      fi
+      start_new_session
+      if [[ "$PATH_IS_CONFIG" = true ]]; then
+        tmux send-keys -t config.0 "$EDITOR $BASE_NAME" ENTER
+      else
+        tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
+      fi
+      jump_to_open_session
+    else
+      if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
+        open "$BASE_PATH"
+      else
+        cd $PARENT_PATH
+        $EDITOR $BASE_NAME
+      fi
+    fi
+  elif [[ "$KEYPRESS" = "alt-enter" ]]; then
+    if [[ "$RUN_TMUX" = true ]]; then
+      start_new_session
+      jump_to_open_session
+    else
+      cd $PARENT_PATH
+    fi
+  elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
+    grep_search
+  elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
+    recursive_search
+  else
+    return
+  fi
+}
+
+grep_search () {
+
+  grep_name="$BASE_PATH"
+  if [[ "$PATH_IS_DIR" = true ]]; then
+    session_name="$BASE_NAME"
+  elif [[ "$PATH_IS_FILE" = true ]]; then
+    # grep_name="$PARENT_PATH"
+    session_name="$PARENT_NAME"
+  fi
+
+  output=$(rg \
+    --line-number \
+    --no-column \
+    --with-filename \
+    --no-heading \
+    --glob "!.git/*" \
+    "." \
+    "$grep_name" \
+    | awk -F  ":" '{print $1" "$2" "$3}' \
+    | fzf\
+      --expect "alt-enter,enter" \
+      --preview "bat --color always {1} --highlight-line {2}" \
+      --preview-window 'right,+{2}+3/3,~3' \
+    | xargs echo)
+
+  if [ ! -z "$output" ]; then
+    if [[ "$RUN_TMUX" = true ]]; then
+      start_new_session
+    fi
+  else
+    return
+  fi
+
+  read -r keypress file_path line <<< "${output}"
+  line_number=${line%% *}
+  parent_path=$(dirname $file_path)
+
+  if [[ "$RUN_TMUX" = true ]]; then
+    if [[ "$keypress" = "enter" ]]; then
+      tmux send-keys -t $session_name.0 "$EDITOR -c ':$line_number norm zz' $file_path" ENTER
+    elif [[ "$keypress" = "alt-enter" ]]; then
+      if [[ "$parent_path" != "$grep_name" ]]; then
+        relative_path=${parent_path#"$grep_name"}
+        relative_path="${relative_path:1}"
+        tmux send-keys -t $session_name.0 "cd $relative_path" ENTER
+      fi
+    else
+      return
+    fi
+    jump_to_open_session
+  else
+    if [[ "$keypress" = "enter" ]]; then
+      $EDITOR -c ":$line_number norm zz" $file_path
+    elif [[ "$keypress" = "alt-enter" ]]; then
+      if [[ "$parent_path" != "$grep_name" ]]; then
+        relative_path=${parent_path#"$grep_name"}
+        relative_path="${relative_path:1}"
+        cd $relative_path
+      fi
+    else
+      return
+    fi
+  fi
+
+}
+
+# TODO possibly implement this in the future
+rg_search ()
+{
+  if [[ $PATH_IS_DIR ]]; then
+    grep_name="$BASE_PATH"
+    session_name="$BASE_NAME"
+  elif [[ $PATH_IS_FILE ]]; then
+    grep_name="$PARENT_PATH"
+    session_name="$PARENT_NAME"
+  fi
+
+  RG_PREFIX="rg --column --line-number --no-heading --color=always --smart-case "
+  INITIAL_QUERY=""
+  FZF_DEFAULT_COMMAND="$RG_PREFIX '$INITIAL_QUERY' $grep_name" \
+  fzf --bind "change:reload:$RG_PREFIX {q} || true" \
+      --ansi \
+      --phony \
+      --query "$INITIAL_QUERY" \
+      --expect "alt-enter,enter" \
+}
+
+main ()
+{
+if [ -d $BASE_PATH ]; then
+  BASE_PATH=${BASE_PATH%?} # Only needed if using fd command
+  PATH_IS_DIR=true
+  open_directory
+else
+  PATH_IS_FILE=true
+  open_file
+fi
+}
+
+main
