@@ -1,5 +1,26 @@
 # Dotfiles Repo
 
+## Ubuntu Installation
+1. Install Essential Packages
+    ```shell
+    sudo apt install awesome xterm kitty xinit firefox
+    ```
+2. Change default shell to Z-Shell
+    ```shell
+    chsh -s $(which zsh)
+    ```
+3. Install Rust
+    ```shell
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+    Follow instructions [here](https://www.rust-lang.org/tools/install) 
+4. Install Node
+    Follow instructions [here](https://github.com/nodesource/distributions/blob/master/README.md#debinstall) 
+5. Install Terminal Tools
+    ```shell
+    sudo apt install fzf bat && cargo 
+    ```
+
 ## Installation
 1. Clone the repository
     ```shell
@@ -9,4 +30,9 @@
 
 ## Create Symlinks
 ln -s ~/.dotfiles/.local/bin/* ~/.local/bin
+ln -s ~/.dotfiles/zsh ~/.local/bin
+ln -s ~/.dotfiles/nvim ~/.config/nvim
+ln -s ~/.dotfiles/tmux ~/.config/zsh
+ln -s ~/.dotfiles/awesome ~/.config/awesome
+ln -s ~/.dotfiles/kitty/* ~/.config/kitty
 ...

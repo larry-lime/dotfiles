@@ -6,3 +6,5 @@
 # Install Homebrew and sudo apt install build-essential
 # If Homebrew is able to be installed, install important deps
 # Create symlinks for all the files at the correct point in times
+
+
