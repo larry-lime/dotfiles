@@ -6,13 +6,14 @@ chsh -s $(which zsh)
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+
+# Installing Useful CLI Tools
+cargo install fd-find ripgrep exa
 
 # Install Node
 curl -fsSL https://deb.nodesource.com/setup_19.x | sudo -E bash - &&\
 sudo apt-get install -y nodejs
-
-# Installing Useful CLI Tools
-cargo install fd-find ripgrep exa
 
 # Building Neovim
 sudo apt-get install build-essential ninja-build gettext libtool libtool-bin autoconf automake cmake g++ pkg-config unzip curl doxygen
@@ -22,6 +23,7 @@ mkdir ~/Builds
 git clone https://github.com/neovim/neovim ~/Builds/neovim
 cd ~/Builds/neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
 sudo make install
+cd .. && rm -rf neovim
 
 # Source Z-Shell
 source ~/.config/zsh/.zshrc
