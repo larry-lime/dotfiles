@@ -11,6 +11,7 @@ sudo apt install gnome-tweaks gnome-shell-extensions
     ```shell
     git clone --recurse-submodules https://github.com/larry-lime/dotfiles
     cd ~/.dotfiles
+    git checkout ubuntu-amd
     ./install.sh
     ```
 ## Additional Apps
