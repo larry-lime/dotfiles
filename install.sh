@@ -35,7 +35,7 @@ git clone https://github.com/tmux-plugins/tpm ~/.dotfiles/tmux/.tmux/plugins/tpm
 # Creating Symlinks for files
 ln -s ~/.dotfiles/.fzf.zsh ~/.fzf.zsh
 ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
-rm ~/.zshenv && ln -s ~/.dotfiles/.zshenv ~/.zshenv
+rm ~/.zshenv ; ln -s ~/.dotfiles/.zshenv ~/.zshenv
 
 # Creating Symlinks for directories
 ln -s ~/.dotfiles/.local/bin ~/.local
@@ -43,6 +43,6 @@ ln -s ~/.dotfiles/zsh ~/.config
 ln -s ~/.dotfiles/nvim ~/.config
 ln -s ~/.dotfiles/tmux ~/.config
 ln -s ~/.dotfiles/awesome ~/.config
-rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
+rmdir ~/.config/kitty ; ln -s ~/.dotfiles/kitty ~/.config/kitty
 
 cd ~ && mkdir Projects Documents Downloads Github-Repos Work
