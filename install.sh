@@ -1,27 +1,13 @@
 # Install Essential Tools
-sudo apt update
-sudo dmenu zsh fzf bat gh 
+xcode-select --install
+brew install fzf bat gh fd ripgrep exa tmux node neovim kitty
+
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Node
-curl -fsSL https://deb.nodesource.com/setup_19.x | sudo -E bash - &&\
-sudo apt-get install -y nodejs
-
-# Installing Useful CLI Tools
-cargo install fd-find ripgrep exa
-
-# Building Neovim
-sudo apt-get install build-essential ninja-build gettext libtool libtool-bin autoconf automake cmake g++ pkg-config unzip curl doxygen
-
-# Check if Builds directory exists. If it doesn't make it and install neovim there
-mkdir ~/Builds
-git clone https://github.com/neovim/neovim ~/Builds/neovim
-cd ~/Builds/neovim && make CMAKE_BUILD_TYPE=RelWithDebInfo
-sudo make install
 
 # Source Z-Shell
 source ~/.config/zsh/.zshrc
