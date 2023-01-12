@@ -36,11 +36,11 @@ ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
 rm ~/.zshenv && ln -s ~/.dotfiles/.zshenv ~/.zshenv
 
 # Creating Symlinks for directories
-ln -s ~/.dotfiles/.local/bin ~/.local/bin
-ln -s ~/.dotfiles/zsh ~/.config/zsh
-ln -s ~/.dotfiles/nvim ~/.config/nvim
-ln -s ~/.dotfiles/tmux ~/.config/tmux
-ln -s ~/.dotfiles/awesome ~/.config/awesome
+ln -s ~/.dotfiles/.local/bin ~/.local
+ln -s ~/.dotfiles/zsh ~/.config
+ln -s ~/.dotfiles/nvim ~/.config
+ln -s ~/.dotfiles/tmux ~/.config
+ln -s ~/.dotfiles/awesome ~/.config
 rmdir ~/.config/kitty && ln -s ~/.dotfiles/kitty ~/.config/kitty
 
 cd ~ && mkdir Projects Documents Downloads Github-Repos Work
