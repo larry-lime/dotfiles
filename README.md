@@ -8,5 +8,8 @@ sudo apt install xinit xdg-utils awesome kitty xterm firefox
 ```
 2. Install Configurations
     ```shell
-    git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles && ~/.dotfiles/install-ubuntu-arm.sh
+    git clone --recurse-submodules https://github.com/larry-lime/dotfiles ~/.dotfiles
+    cd ~/.dotfiles
+    git checkout ubuntu-arm
+    ./install.sh
     ```
