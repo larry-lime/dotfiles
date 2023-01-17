@@ -75,7 +75,7 @@ local chosen_theme = themes[4]
 local modkey = "Mod4"
 local altkey = "Mod1"
 local terminal = "kitty"
-local browser = "firefox"
+local browser = "brave-browser"
 local editor = os.getenv("EDITOR") or "editor"
 local editor_cmd = terminal .. " -e " .. editor
 
@@ -102,7 +102,7 @@ awful.layout.layouts = {
 
 -- beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
 beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
-beautiful.font = "Roboto 10"
+beautiful.font = "Roboto 8"
 
 -- {{{ Menu
 -- Create a launcher widget and a main menu
@@ -372,9 +372,9 @@ globalkeys = gears.table.join(
   awful.key({ altkey }, "Up", function() volume_widget:inc(5) end),
   awful.key({ altkey }, "Down", function() volume_widget:dec(5) end),
   -- Brightness
-  awful.key({ altkey }, "Left", function() os.execute("brightnessctl set 5%-") end,
+  awful.key({ altkey }, "Left", function() os.execute("sudo brightnessctl set 5%-") end,
     { description = "+10%", group = "hotkeys" }),
-  awful.key({ altkey }, "Right", function() os.execute("brightnessctl set +5%") end,
+  awful.key({ altkey }, "Right", function() os.execute("sudo brightnessctl set +5%") end,
     { description = "-10%", group = "hotkeys" }),
   -- User Programs
   awful.key({ modkey }, "q", function() awful.spawn(browser) end,

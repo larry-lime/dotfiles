@@ -21,3 +21,4 @@ sudo snap install lazygit
 ### Security
 sudo apt-get install cryptsetup
 sudo apt install awesome
+sudo visudo <- enabled running sudo without password
