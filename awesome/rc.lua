@@ -81,19 +81,19 @@ local editor_cmd = terminal .. " -e " .. editor
 
 -- Table of layouts to cover with awful.layout.inc, order matters.
 awful.layout.layouts = {
-  awful.layout.suit.floating,
   awful.layout.suit.tile,
-  awful.layout.suit.tile.left,
-  awful.layout.suit.tile.bottom,
-  awful.layout.suit.tile.top,
-  awful.layout.suit.fair,
-  awful.layout.suit.fair.horizontal,
-  awful.layout.suit.spiral,
-  awful.layout.suit.spiral.dwindle,
   awful.layout.suit.max,
-  awful.layout.suit.max.fullscreen,
-  awful.layout.suit.magnifier,
-  awful.layout.suit.corner.nw,
+  awful.layout.suit.floating,
+  -- awful.layout.suit.tile.left,
+  -- awful.layout.suit.tile.bottom,
+  -- awful.layout.suit.tile.top,
+  -- awful.layout.suit.fair,
+  -- awful.layout.suit.fair.horizontal,
+  -- awful.layout.suit.spiral,
+  -- awful.layout.suit.spiral.dwindle,
+  -- awful.layout.suit.max.fullscreen,
+  -- awful.layout.suit.magnifier,
+  -- awful.layout.suit.corner.nw,
   -- awful.layout.suit.corner.ne,
   -- awful.layout.suit.corner.sw,
   -- awful.layout.suit.corner.se,
@@ -102,7 +102,7 @@ awful.layout.layouts = {
 
 -- beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
 beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
-beautiful.font = "Roboto 8"
+beautiful.font = "Roboto 10"
 
 -- {{{ Menu
 -- Create a launcher widget and a main menu
@@ -277,13 +277,13 @@ globalkeys = gears.table.join(
   awful.key({ modkey, }, "Escape", awful.tag.history.restore,
     { description = "go back", group = "tag" }),
 
-  awful.key({ modkey, }, "j",
+  awful.key({ modkey, }, "k",
     function()
       awful.client.focus.byidx(1)
     end,
     { description = "focus next by index", group = "client" }
   ),
-  awful.key({ modkey, }, "k",
+  awful.key({ modkey, }, "j",
     function()
       awful.client.focus.byidx(-1)
     end,
@@ -293,9 +293,9 @@ globalkeys = gears.table.join(
     { description = "show main menu", group = "awesome" }),
 
   -- Layout manipulation
-  awful.key({ modkey, "Shift" }, "j", function() awful.client.swap.byidx(1) end,
+  awful.key({ modkey, "Shift" }, "k", function() awful.client.swap.byidx(1) end,
     { description = "swap with next client by index", group = "client" }),
-  awful.key({ modkey, "Shift" }, "k", function() awful.client.swap.byidx(-1) end,
+  awful.key({ modkey, "Shift" }, "j", function() awful.client.swap.byidx(-1) end,
     { description = "swap with previous client by index", group = "client" }),
   awful.key({ modkey, "Control" }, "j", function() awful.screen.focus_relative(1) end,
     { description = "focus the next screen", group = "screen" }),
@@ -332,8 +332,8 @@ globalkeys = gears.table.join(
     { description = "increase the number of columns", group = "layout" }),
   awful.key({ modkey, "Control" }, "l", function() awful.tag.incncol(-1, nil, true) end,
     { description = "decrease the number of columns", group = "layout" }),
-  -- awful.key({ modkey, }, "space", function() awful.layout.inc(1) end,
-  --   { description = "select next", group = "layout" }),
+  awful.key({ modkey, }, "space", function() awful.layout.inc(1) end,
+    { description = "select next", group = "layout" }),
   awful.key({ modkey, "Shift" }, "space", function() awful.layout.inc(-1) end,
     { description = "select previous", group = "layout" }),
 
@@ -369,13 +369,56 @@ globalkeys = gears.table.join(
   awful.key({ modkey }, "p", function() menubar.show() end,
     { description = "show the menubar", group = "launcher" }),
   -- Volume
-  awful.key({ altkey }, "Up", function() volume_widget:inc(5) end),
-  awful.key({ altkey }, "Down", function() volume_widget:dec(5) end),
+  -- awful.key({ altkey }, "Up", function() volume_widget:inc(5) end),
+  -- awful.key({ altkey }, "Down", function() volume_widget:dec(5) end),
+  awful.key(
+    {},
+    'XF86AudioRaiseVolume',
+    function()
+      awful.spawn('amixer -D pulse sset Master 5%+')
+    end,
+    { description = 'volume up', group = 'hotkeys' }
+  ),
+  awful.key(
+    {},
+    'XF86AudioLowerVolume',
+    function()
+      awful.spawn('amixer -D pulse sset Master 5%-')
+    end,
+    { description = 'volume down', group = 'hotkeys' }
+  ),
+  awful.key(
+    {},
+    'XF86AudioMute',
+    function()
+      awful.spawn('amixer -D pulse set Master 1+ toggle')
+    end,
+    { description = 'toggle mute', group = 'hotkeys' }
+  ),
+
   -- Brightness
-  awful.key({ altkey }, "Left", function() os.execute("sudo brightnessctl set 5%-") end,
-    { description = "+10%", group = "hotkeys" }),
-  awful.key({ altkey }, "Right", function() os.execute("sudo brightnessctl set +5%") end,
-    { description = "-10%", group = "hotkeys" }),
+  -- awful.key({ altkey }, "Left", function() os.execute("sudo brightnessctl set 4%-") end,
+  --   { description = "+10%", group = "hotkeys" }),
+  -- awful.key({ altkey }, "Right", function() os.execute("sudo brightnessctl set +5%") end,
+  --   { description = "-10%", group = "hotkeys" }),
+  awful.key(
+    {},
+    'XF86MonBrightnessUp',
+    function()
+      awful.spawn('sudo brightnessctl set +5%')
+    end,
+    { description = '+5%', group = 'hotkeys' }
+  ),
+  awful.key(
+    {},
+    'XF86MonBrightnessDown',
+    function()
+      awful.spawn('sudo brightnessctl set 5%-')
+    end,
+    { description = '-5%', group = 'hotkeys' }
+  ),
+
+
   -- User Programs
   awful.key({ modkey }, "q", function() awful.spawn(browser) end,
     { description = "run browser", group = "launcher" }),
@@ -383,7 +426,7 @@ globalkeys = gears.table.join(
     { description = "run slack", group = "launcher" }),
   awful.key({ modkey, "Shift" }, "z", function() awful.spawn("zoom") end,
     { description = "run slack", group = "launcher" }),
-  awful.key({ modkey }, "r", function() awful.spawn("rofi -matching fuzzy -show combi") end,
+  awful.key({ modkey }, "r", function() awful.spawn("rofi -combi-modi window,drun -matching fuzzy -show combi") end,
     { description = "run rofi", group = "launcher" })
 
 
@@ -442,13 +485,14 @@ for i = 1, 9 do
     -- View tag only.
     awful.key({ modkey }, "#" .. i + 9,
       function()
-        local screen = awful.screen.focused()
-        local tag = screen.tags[i]
-        if tag then
-          tag:view_only()
-        end
-      end,
-      { description = "view tag #" .. i, group = "tag" }),
+        -- local screen = awful.screen.focused()
+        awful.screen.connect_for_each_screen(function(screen)
+          local tag = screen.tags[i]
+          if tag then
+            tag:view_only()
+          end
+        end)
+      end),
     -- Toggle tag display.
     awful.key({ modkey, "Control" }, "#" .. i + 9,
       function()
@@ -625,9 +669,5 @@ end)
 client.connect_signal("focus", function(c) c.border_color = beautiful.border_focus end)
 client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_normal end)
 
--- }}}
-
 -- Autocommands
-awful.spawn("startup")
--- awful.spawn.with_shell("compton")
--- awful.spawn.with_shell("nitrogen --restore")
+awful.spawn.with_shell("startup")
