@@ -674,3 +674,4 @@ client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_n
 
 -- Autocommands
 awful.spawn.with_shell("startup")
+awful.spawn.with_shell("~/.screenlayout/Default.sh")
