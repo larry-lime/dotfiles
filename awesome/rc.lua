@@ -24,6 +24,10 @@ local has_fdo, freedesktop = pcall(require, "awesome-freedesktop")
 
 -- Custom Widgets
 local volume_widget = require('awesome-wm-widgets.volume-widget.volume')
+local systray = wibox.widget.systray()
+  systray:set_horizontal(true)
+  systray:set_base_size(20)
+  systray.forced_height = 20
 
 -- {{{ Error handling
 -- Check if awesome encountered an error during startup and fell back to
@@ -145,7 +149,7 @@ local mykeyboardlayout = awful.widget.keyboardlayout()
 
 -- {{{ Wibar
 -- Create a textclock widget
-local mytextclock = wibox.widget.textclock()
+local mytextclock = wibox.widget.textclock('<span font="Roboto Mono 12">%I:%M %p</span>')
 
 -- Create a wibox for each screen and add it
 local taglist_buttons = gears.table.join(
@@ -248,9 +252,10 @@ awful.screen.connect_for_each_screen(function(s)
     s.mytasklist, -- Middle widget
     { -- Right widgets
       layout = wibox.layout.fixed.horizontal,
-      volume_widget(),
-      mykeyboardlayout,
-      wibox.widget.systray(),
+      -- systray,
+      -- volume_widget(),
+      -- mykeyboardlayout,
+      -- wibox.widget.systray(),
       mytextclock,
       s.mylayoutbox,
     },
@@ -369,8 +374,6 @@ globalkeys = gears.table.join(
   awful.key({ modkey }, "p", function() menubar.show() end,
     { description = "show the menubar", group = "launcher" }),
   -- Volume
-  -- awful.key({ altkey }, "Up", function() volume_widget:inc(5) end),
-  -- awful.key({ altkey }, "Down", function() volume_widget:dec(5) end),
   awful.key(
     {},
     'XF86AudioRaiseVolume',
@@ -596,7 +599,7 @@ awful.rules.rules = {
 
   -- Add titlebars to normal clients and dialogs
   { rule_any = { type = { "normal", "dialog" }
-  }, properties = { titlebars_enabled = true }
+  }, properties = { titlebars_enabled = false }
   },
 
   -- Set Firefox to always map on the tag named "2" on screen 1.
