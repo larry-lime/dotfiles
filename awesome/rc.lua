@@ -52,16 +52,16 @@ end
 
 -- {{{ Variable definitions
 local themes = {
-    "blackburn",       -- 1
-    "copland",         -- 2
-    "dremora",         -- 3
-    "holo",            -- 4
-    "multicolor",      -- 5
-    "powerarrow",      -- 6
-    "powerarrow-dark", -- 7
-    "rainbow",         -- 8
-    "steamburn",       -- 9
-    "vertex"           -- 10
+  "blackburn", -- 1
+  "copland", -- 2
+  "dremora", -- 3
+  "holo", -- 4
+  "multicolor", -- 5
+  "powerarrow", -- 6
+  "powerarrow-dark", -- 7
+  "rainbow", -- 8
+  "steamburn", -- 9
+  "vertex" -- 10
 }
 -- Themes define colours, icons, font and wallpapers.
 
@@ -332,8 +332,8 @@ globalkeys = gears.table.join(
     { description = "increase the number of columns", group = "layout" }),
   awful.key({ modkey, "Control" }, "l", function() awful.tag.incncol(-1, nil, true) end,
     { description = "decrease the number of columns", group = "layout" }),
-  awful.key({ modkey, }, "space", function() awful.layout.inc(1) end,
-    { description = "select next", group = "layout" }),
+  -- awful.key({ modkey, }, "space", function() awful.layout.inc(1) end,
+  --   { description = "select next", group = "layout" }),
   awful.key({ modkey, "Shift" }, "space", function() awful.layout.inc(-1) end,
     { description = "select previous", group = "layout" }),
 
@@ -350,10 +350,10 @@ globalkeys = gears.table.join(
     { description = "restore minimized", group = "client" }),
 
   -- Prompt
-  awful.key({ modkey }, "r", function()
-    awful.util.spawn("dmenu_run")
-  end,
-    { description = "run prompt", group = "launcher" }),
+  -- awful.key({ modkey }, "r", function()
+  --   awful.util.spawn("dmenu_run")
+  -- end,
+  --   { description = "run prompt", group = "launcher" }),
 
   awful.key({ modkey }, "x",
     function()
@@ -382,7 +382,9 @@ globalkeys = gears.table.join(
   awful.key({ modkey, "Shift" }, "s", function() awful.spawn("slack") end,
     { description = "run slack", group = "launcher" }),
   awful.key({ modkey, "Shift" }, "z", function() awful.spawn("zoom") end,
-    { description = "run slack", group = "launcher" })
+    { description = "run slack", group = "launcher" }),
+  awful.key({ modkey }, "r", function() awful.spawn("rofi -matching fuzzy -show combi") end,
+    { description = "run rofi", group = "launcher" })
 
 
 )
@@ -539,7 +541,7 @@ awful.rules.rules = {
     -- Note that the name property shown in xprop might be set slightly after creation of the client
     -- and the name shown there might not match defined rules here.
     name = {
-     "Event Tester", -- xev.
+      "Event Tester", -- xev.
     },
     role = {
       "AlarmWindow", -- Thunderbird's calendar.
@@ -617,7 +619,7 @@ end)
 -- Enable sloppy focus, so that focus follows mouse.
 -- Enable sloppy focus, so that focus follows mouse.
 client.connect_signal("mouse::enter", function(c)
-    c:emit_signal("request::activate", "mouse_enter", {raise = vi_focus})
+  c:emit_signal("request::activate", "mouse_enter", { raise = vi_focus })
 end)
 
 client.connect_signal("focus", function(c) c.border_color = beautiful.border_focus end)
