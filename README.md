@@ -22,3 +22,14 @@ sudo snap install lazygit
 sudo apt-get install cryptsetup
 sudo apt install awesome
 sudo visudo <- enabled running sudo without password
+sudo apt install dconf-editor xsel dmenu brightnessctl
+
+### Configurations
+#### Brightness
+usermod -a -G video ${USER}
+#### Screen DPI
+1) Create the ~/.Xresources file with your settings, that is 
+Xft.dpi: 130
+
+2) I needed to include the settings from .Xresources by adding the following line to the file ~/.xinitrc 
+xrdb -merge ~/.Xresources

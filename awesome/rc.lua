@@ -25,9 +25,9 @@ local has_fdo, freedesktop = pcall(require, "awesome-freedesktop")
 -- Custom Widgets
 local volume_widget = require('awesome-wm-widgets.volume-widget.volume')
 local systray = wibox.widget.systray()
-  systray:set_horizontal(true)
-  systray:set_base_size(20)
-  systray.forced_height = 20
+systray:set_horizontal(true)
+systray:set_base_size(20)
+systray.forced_height = 20
 
 -- {{{ Error handling
 -- Check if awesome encountered an error during startup and fell back to
@@ -399,16 +399,11 @@ globalkeys = gears.table.join(
     { description = 'toggle mute', group = 'hotkeys' }
   ),
 
-  -- Brightness
-  -- awful.key({ altkey }, "Left", function() os.execute("sudo brightnessctl set 4%-") end,
-  --   { description = "+10%", group = "hotkeys" }),
-  -- awful.key({ altkey }, "Right", function() os.execute("sudo brightnessctl set +5%") end,
-  --   { description = "-10%", group = "hotkeys" }),
   awful.key(
     {},
     'XF86MonBrightnessUp',
     function()
-      awful.spawn('sudo brightnessctl set +5%')
+      awful.spawn('brightnessctl set +5%')
     end,
     { description = '+5%', group = 'hotkeys' }
   ),
@@ -416,7 +411,7 @@ globalkeys = gears.table.join(
     {},
     'XF86MonBrightnessDown',
     function()
-      awful.spawn('sudo brightnessctl set 5%-')
+      awful.spawn('brightnessctl set 5%-')
     end,
     { description = '-5%', group = 'hotkeys' }
   ),
@@ -429,7 +424,7 @@ globalkeys = gears.table.join(
     { description = "run slack", group = "launcher" }),
   awful.key({ modkey, "Shift" }, "z", function() awful.spawn("zoom") end,
     { description = "run slack", group = "launcher" }),
-  awful.key({ modkey }, "r", function() awful.spawn("rofi -combi-modi window,drun -matching fuzzy -show combi") end,
+  awful.key({ modkey }, "r", function() awful.spawn("rofi -combi-modi window,run -matching fuzzy -show combi") end,
     { description = "run rofi", group = "launcher" })
 
 

@@ -5,7 +5,7 @@ sudo apt install zsh cargo
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 
-brew install fzf bat gh node ripgrep exa fd neovim tmux
+brew install fzf bat gh node ripgrep exa fd neovim tmux lazygit
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
