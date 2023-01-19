@@ -4,8 +4,8 @@
 
 DIR_1=$HOME/Projects
 DIR_2=$HOME/.dotfiles
-# DIR_3=$HOME/Classes
-DIR_4=$HOME/.local/bin
+DIR_3=$HOME/Classes
+DIR_4=$HOME/Scripts
 DIR_5=$HOME/Documents
 DIR_6=$HOME/Downloads
 DIR_7=$HOME/Github-Repos
