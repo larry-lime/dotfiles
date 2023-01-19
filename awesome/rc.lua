@@ -105,7 +105,8 @@ awful.layout.layouts = {
 -- }}}
 
 -- beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
-beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
+beautiful.init("~/.dotfiles/awesome/themes/default/theme.lua")
+-- beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
 beautiful.font = "Roboto 10"
 
 -- {{{ Menu
@@ -149,7 +150,7 @@ local mykeyboardlayout = awful.widget.keyboardlayout()
 
 -- {{{ Wibar
 -- Create a textclock widget
-local mytextclock = wibox.widget.textclock('<span font="Roboto Mono 12">%I:%M %p</span>')
+-- local mytextclock = wibox.widget.textclock('<span font="Roboto Mono 12">%I:%M %p</span>')
 
 -- Create a wibox for each screen and add it
 local taglist_buttons = gears.table.join(
@@ -256,9 +257,9 @@ awful.screen.connect_for_each_screen(function(s)
       layout = wibox.layout.fixed.horizontal,
       -- systray,
       -- volume_widget(),
+      -- mytextclock,
       -- mykeyboardlayout,
       -- wibox.widget.systray(),
-      mytextclock,
       s.mylayoutbox,
     },
   }
@@ -278,23 +279,23 @@ globalkeys = gears.table.join(
   awful.key({ modkey, }, "s", hotkeys_popup.show_help,
     { description = "show help", group = "awesome" }),
 
-  -- awful.key({ modkey, }, "Left", awful.tag.viewprev,
-  --   { description = "view previous", group = "tag" }),
-  -- awful.key({ modkey, }, "Right", awful.tag.viewnext,
-  --   { description = "view next", group = "tag" }),
-  awful.key({ modkey, }, "Left",
-    function()
-      for i = 1, screen.count() do
-        awful.tag.viewprev(i)
-      end
-    end),
-
-  awful.key({ modkey, }, "Right",
-    function()
-      for i = 1, screen.count() do
-        awful.tag.viewnext(i)
-      end
-    end),
+  awful.key({ modkey, }, "Left", awful.tag.viewprev,
+    { description = "view previous", group = "tag" }),
+  awful.key({ modkey, }, "Right", awful.tag.viewnext,
+    { description = "view next", group = "tag" }),
+  -- awful.key({ modkey, }, "Left",
+  --   function()
+  --     for i = 1, screen.count() do
+  --       awful.tag.viewprev(i)
+  --     end
+  --   end),
+  --
+  -- awful.key({ modkey, }, "Right",
+  --   function()
+  --     for i = 1, screen.count() do
+  --       awful.tag.viewnext(i)
+  --     end
+  --   end),
 
   awful.key({ modkey, }, "Escape", awful.tag.history.restore,
     { description = "go back", group = "tag" }),
@@ -433,6 +434,17 @@ globalkeys = gears.table.join(
     { description = '-5%', group = 'hotkeys' }
   ),
 
+  awful.key({ modkey }, "d", function()
+    local tags = awful.screen.focused().tags
+    for i = 1, 2 do tags[i].selected = false end
+  end,
+    { description = "show desktop", group = "launcher" }),
+
+  awful.key({ modkey, "Shift" }, "d", function()
+    local tags = awful.screen.focused().tags
+    for i = 1, 2 do tags[i].selected = true end
+  end,
+    { description = "unshow desktop", group = "launcher" }),
 
   -- User Programs
   awful.key({ modkey }, "b", function() awful.spawn(browser) end,
@@ -688,6 +700,20 @@ tag.connect_signal("property::selected",
     end
   end)
 
+function focus_client_under_mouse()
+  gears.timer({ timeout = 0.1,
+    autostart = true,
+    single_shot = true,
+    callback = function()
+      local n = mouse.object_under_pointer()
+      if n ~= nil and n ~= client.focus then
+        client.focus = n
+      end
+    end
+  })
+end
+
+screen.connect_signal("tag::history::update", focus_client_under_mouse)
 -- Enable sloppy focus, so that focus follows mouse.
 -- Enable sloppy focus, so that focus follows mouse.
 client.connect_signal("mouse::enter", function(c)
@@ -699,5 +725,5 @@ client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_n
 
 -- Autocommands
 awful.spawn.with_shell("~/.dotfiles/.local/bin/startup")
-awful.spawn.with_shell("compton")
 awful.spawn.with_shell("~/.screenlayout/Default.sh")
+awful.spawn.with_shell("compton")
