@@ -441,10 +441,8 @@ globalkeys = gears.table.join(
     { description = "run slack", group = "launcher" }),
   awful.key({ modkey, "Shift" }, "z", function() awful.spawn("zoom") end,
     { description = "run slack", group = "launcher" }),
-  awful.key({ modkey }, "r", function() awful.spawn("rofi -combi-modi window,drun -matching fuzzy -show combi") end,
+  awful.key({ modkey }, "r", function() awful.spawn("rofi -combi-modi window,drun,run -matching fuzzy -show combi") end,
     { description = "run rofi", group = "launcher" })
-
-
 )
 
 clientkeys = gears.table.join(
@@ -500,13 +498,12 @@ for i = 1, 9 do
     -- View tag only.
     awful.key({ modkey }, "#" .. i + 9,
       function()
-        awful.screen.connect_for_each_screen(function(screen)
-          -- local screen = awful.screen.focused()
-          local tag = screen.tags[i]
-          if tag then
-            tag:view_only()
-          end
-        end)
+        -- awful.screen.connect_for_each_screen(function(screen)
+        local screen = awful.screen.focused()
+        local tag = screen.tags[i]
+        if tag then
+          tag:view_only()
+        end
       end),
     -- Toggle tag display.
     awful.key({ modkey, "Control" }, "#" .. i + 9,
@@ -675,21 +672,21 @@ client.connect_signal("request::titlebars", function(c)
   }
 end)
 
--- tag.connect_signal("property::selected",
---   function(t)
---     if t.selected then
---       local ts = t.screen
---       local idx = t.index
---       awful.screen.connect_for_each_screen(
---         function(s)
---           if s == ts then return nil end
---           local tag = s.tags[idx]
---           if tag then
---             tag:view_only()
---           end
---         end)
---     end
---   end)
+tag.connect_signal("property::selected",
+  function(t)
+    if t.selected then
+      local ts = t.screen
+      local idx = t.index
+      awful.screen.connect_for_each_screen(
+        function(s)
+          if s == ts then return nil end
+          local tag = s.tags[idx]
+          if tag then
+            tag:view_only()
+          end
+        end)
+    end
+  end)
 
 -- Enable sloppy focus, so that focus follows mouse.
 -- Enable sloppy focus, so that focus follows mouse.
@@ -702,4 +699,5 @@ client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_n
 
 -- Autocommands
 awful.spawn.with_shell("~/.dotfiles/.local/bin/startup")
+awful.spawn.with_shell("compton")
 awful.spawn.with_shell("~/.screenlayout/Default.sh")

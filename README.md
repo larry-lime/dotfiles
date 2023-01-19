@@ -39,4 +39,5 @@ sudo apt install okular
 
 ### Ricing my Desktop
 sudo apt install gir1.2-gmenu-3.0
+sudo apt install kmix
 

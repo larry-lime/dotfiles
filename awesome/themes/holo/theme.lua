@@ -313,110 +313,110 @@ local barcolor = gears.color({
   stops = { { 0, theme.bg_focus }, { 0.25, "#505050" }, { 1, theme.bg_focus } }
 })
 
-function theme.at_screen_connect(s)
-  -- Quake application
-  s.quake = lain.util.quake({ app = awful.util.terminal })
-
-  -- If wallpaper is a function, call it with the screen
-  local wallpaper = theme.wallpaper
-  if type(wallpaper) == "function" then
-    wallpaper = wallpaper(s)
-  end
-  gears.wallpaper.maximized(wallpaper, s, true)
-
-  -- Tags
-  awful.tag(awful.util.tagnames, s, awful.layout.layouts[1])
-
-  -- Create a promptbox for each screen
-  s.mypromptbox = awful.widget.prompt()
-  -- Create an imagebox widget which will contains an icon indicating which layout we're using.
-  -- We need one layoutbox per screen.
-  s.mylayoutbox = awful.widget.layoutbox(s)
-  s.mylayoutbox:buttons(my_table.join(
-    awful.button({}, 1, function() awful.layout.inc(1) end),
-    awful.button({}, 2, function() awful.layout.set(awful.layout.layouts[1]) end),
-    awful.button({}, 3, function() awful.layout.inc(-1) end),
-    awful.button({}, 4, function() awful.layout.inc(1) end),
-    awful.button({}, 5, function() awful.layout.inc(-1) end)))
-  -- Create a taglist widget
-  s.mytaglist = awful.widget.taglist(s, awful.widget.taglist.filter.all, awful.util.taglist_buttons,
-    { bg_focus = barcolor })
-
-  mytaglistcont = wibox.container.background(s.mytaglist, theme.bg_focus, gears.shape.rectangle)
-  s.mytag = wibox.container.margin(mytaglistcont, dpi(0), dpi(0), dpi(5), dpi(5))
-
-  -- Create a tasklist widget
-  s.mytasklist = awful.widget.tasklist(s, awful.widget.tasklist.filter.currenttags, awful.util.tasklist_buttons,
-    { bg_focus = theme.bg_focus, shape = gears.shape.rectangle, shape_border_width = 5,
-      shape_border_color = theme.tasklist_bg_normal, align = "center" })
-
-  -- Create the wibox
-  s.mywibox = awful.wibar({ position = "top", screen = s, height = dpi(32) })
-
-  -- Add widgets to the wibox
-  s.mywibox:setup {
-    layout = wibox.layout.align.horizontal,
-    { -- Left widgets
-      layout = wibox.layout.fixed.horizontal,
-      first,
-      s.mytag,
-      spr_small,
-      s.mylayoutbox,
-      spr_small,
-      s.mypromptbox,
-    },
-    nil, -- Middle widget
-    { -- Right widgets
-      layout = wibox.layout.fixed.horizontal,
-      wibox.widget.systray(),
-      --theme.mail.widget,
-      --bat.widget,
-      spr_right,
-      musicwidget,
-      bar,
-      prev_icon,
-      next_icon,
-      stop_icon,
-      play_pause_icon,
-      bar,
-      mpd_icon,
-      bar,
-      spr_very_small,
-      volumewidget,
-      spr_left,
-    },
-  }
-
-  -- Create the bottom wibox
-  s.mybottomwibox = awful.wibar({ position = "bottom", screen = s, border_width = dpi(0), height = dpi(32) })
-  s.borderwibox = awful.wibar({ position = "bottom", screen = s, height = dpi(1), bg = theme.fg_focus, x = dpi(0),
-    y = dpi(33) })
-
-  -- Add widgets to the bottom wibox
-  s.mybottomwibox:setup {
-    layout = wibox.layout.align.horizontal,
-    { -- Left widgets
-      layout = wibox.layout.fixed.horizontal,
-      mylauncher,
-    },
-    s.mytasklist, -- Middle widget
-    { -- Right widgets
-      layout = wibox.layout.fixed.horizontal,
-      spr_bottom_right,
-      netdown_icon,
-      networkwidget,
-      netup_icon,
-      bottom_bar,
-      cpu_icon,
-      cpuwidget,
-      bottom_bar,
-      calendar_icon,
-      calendarwidget,
-      bottom_bar,
-      clock_icon,
-      clockwidget,
-    },
-  }
-end
+-- function theme.at_screen_connect(s)
+--   -- Quake application
+--   s.quake = lain.util.quake({ app = awful.util.terminal })
+--
+--   -- If wallpaper is a function, call it with the screen
+--   local wallpaper = theme.wallpaper
+--   if type(wallpaper) == "function" then
+--     wallpaper = wallpaper(s)
+--   end
+--   gears.wallpaper.maximized(wallpaper, s, true)
+--
+--   -- Tags
+--   awful.tag(awful.util.tagnames, s, awful.layout.layouts[1])
+--
+--   -- Create a promptbox for each screen
+--   s.mypromptbox = awful.widget.prompt()
+--   -- Create an imagebox widget which will contains an icon indicating which layout we're using.
+--   -- We need one layoutbox per screen.
+--   s.mylayoutbox = awful.widget.layoutbox(s)
+--   s.mylayoutbox:buttons(my_table.join(
+--     awful.button({}, 1, function() awful.layout.inc(1) end),
+--     awful.button({}, 2, function() awful.layout.set(awful.layout.layouts[1]) end),
+--     awful.button({}, 3, function() awful.layout.inc(-1) end),
+--     awful.button({}, 4, function() awful.layout.inc(1) end),
+--     awful.button({}, 5, function() awful.layout.inc(-1) end)))
+--   -- Create a taglist widget
+--   s.mytaglist = awful.widget.taglist(s, awful.widget.taglist.filter.all, awful.util.taglist_buttons,
+--     { bg_focus = barcolor })
+--
+--   mytaglistcont = wibox.container.background(s.mytaglist, theme.bg_focus, gears.shape.rectangle)
+--   s.mytag = wibox.container.margin(mytaglistcont, dpi(0), dpi(0), dpi(5), dpi(5))
+--
+--   -- Create a tasklist widget
+--   s.mytasklist = awful.widget.tasklist(s, awful.widget.tasklist.filter.currenttags, awful.util.tasklist_buttons,
+--     { bg_focus = theme.bg_focus, shape = gears.shape.rectangle, shape_border_width = 5,
+--       shape_border_color = theme.tasklist_bg_normal, align = "center" })
+--
+--   -- Create the wibox
+--   -- s.mywibox = awful.wibar({ position = "top", screen = s, height = dpi(32) })
+--
+--   -- Add widgets to the wibox
+--   s.mywibox:setup {
+--     layout = wibox.layout.align.horizontal,
+--     { -- Left widgets
+--       layout = wibox.layout.fixed.horizontal,
+--       first,
+--       s.mytag,
+--       spr_small,
+--       s.mylayoutbox,
+--       spr_small,
+--       s.mypromptbox,
+--     },
+--     nil, -- Middle widget
+--     { -- Right widgets
+--       layout = wibox.layout.fixed.horizontal,
+--       wibox.widget.systray(),
+--       --theme.mail.widget,
+--       --bat.widget,
+--       spr_right,
+--       musicwidget,
+--       bar,
+--       prev_icon,
+--       next_icon,
+--       stop_icon,
+--       play_pause_icon,
+--       bar,
+--       mpd_icon,
+--       bar,
+--       spr_very_small,
+--       volumewidget,
+--       spr_left,
+--     },
+--   }
+--
+--   -- Create the bottom wibox
+--   s.mybottomwibox = awful.wibar({ position = "bottom", screen = s, border_width = dpi(0), height = dpi(32) })
+--   s.borderwibox = awful.wibar({ position = "bottom", screen = s, height = dpi(1), bg = theme.fg_focus, x = dpi(0),
+--     y = dpi(33) })
+--
+--   -- Add widgets to the bottom wibox
+--   s.mybottomwibox:setup {
+--     layout = wibox.layout.align.horizontal,
+--     { -- Left widgets
+--       layout = wibox.layout.fixed.horizontal,
+--       mylauncher,
+--     },
+--     s.mytasklist, -- Middle widget
+--     { -- Right widgets
+--       layout = wibox.layout.fixed.horizontal,
+--       spr_bottom_right,
+--       netdown_icon,
+--       networkwidget,
+--       netup_icon,
+--       bottom_bar,
+--       cpu_icon,
+--       cpuwidget,
+--       bottom_bar,
+--       calendar_icon,
+--       calendarwidget,
+--       bottom_bar,
+--       clock_icon,
+--       clockwidget,
+--     },
+--   }
+-- end
 
 return theme
