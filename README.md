@@ -33,3 +33,10 @@ Xft.dpi: 130
 
 2) I needed to include the settings from .Xresources by adding the following line to the file ~/.xinitrc 
 xrdb -merge ~/.Xresources
+#### Additional Apps
+lxappearance
+sudo apt install okular
+
+### Ricing my Desktop
+sudo apt install gir1.2-gmenu-3.0
+
