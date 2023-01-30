@@ -62,6 +62,14 @@ if [ -z $BASE_PATH ]; then
   return
 fi
 
+BASE_NAME=$(basename $BASE_PATH)
+PARENT_PATH=$(dirname $BASE_PATH)
+PARENT_NAME=$(basename $PARENT_PATH | tr -d '.')
+PATH_IS_DIR=false
+PATH_IS_FILE=false
+PATH_IS_CONFIG=false
+SESSION_IS_RUNNING=false
+START_TMUX=false
 
 if [[ "$1" = "--tmux" ]]; then
   RUN_TMUX=true
