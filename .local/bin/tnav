@@ -1,14 +1,12 @@
 #!/bin/zsh
 
-#!/usr/bin/zsh
-
 DIR_1=$HOME/Projects
 DIR_2=$HOME/.dotfiles
 DIR_3=$HOME/Classes
-DIR_4=$HOME/Scripts
+DIR_4=$HOME/.local/bin
 DIR_5=$HOME/Documents
 DIR_6=$HOME/Downloads
-DIR_7=$HOME/.local/bin
+DIR_7=$HOME/Github-Repos
 DIR_8=$HOME/Research
 DIR_9=$HOME/Work
 
@@ -16,10 +14,9 @@ CWD=$(pwd)
 
 # Add your own project directory paths
 if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
-  cd $HOME
   OUTPUT=$(fd . $DIR_1 $DIR_2 $DIR_3 $DIR_4 $DIR_5 $DIR_6 $DIR_7 $DIR_8 $DIR_9\
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
       --preview '
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I "node_modules" --git-ignore {};
@@ -31,7 +28,7 @@ if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
 elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
   OUTPUT=$(fd . $(pwd) \
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
@@ -43,7 +40,7 @@ elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
 else # Argument passed is a file or directory path
   OUTPUT=$(fd . ${@:$#} \
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
@@ -56,9 +53,6 @@ fi
 read -r KEYPRESS BASE_PATH <<< "${OUTPUT}"
 
 if [ -z $BASE_PATH ]; then
-  if [[ ! "$(pwd)" = $HOME ]]; then
-    cd $HOME
-  fi
   return
 fi
 
@@ -164,8 +158,6 @@ open_directory ()
     grep_search
   elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
     recursive_search
-  elif [[ "$KEYPRESS" = "ctrl-c" ]]; then
-    cd $CWD
   else
     return
   fi
@@ -205,8 +197,6 @@ open_file ()
     grep_search
   elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
     recursive_search
-  elif [[ "$KEYPRESS" = "ctrl-c" ]]; then
-    cd $CWD
   else
     return
   fi
