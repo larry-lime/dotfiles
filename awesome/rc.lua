@@ -24,10 +24,16 @@ local has_fdo, freedesktop = pcall(require, "awesome-freedesktop")
 
 -- Custom Widgets
 local volume_widget = require('awesome-wm-widgets.volume-widget.volume')
-local systray = wibox.widget.systray()
-systray:set_horizontal(true)
-systray:set_base_size(20)
-systray.forced_height = 20
+local brightness_widget = require("awesome-wm-widgets.brightness-widget.brightness")
+local cpu_widget = require("awesome-wm-widgets.cpu-widget.cpu-widget")
+local ram_widget = require("awesome-wm-widgets.ram-widget.ram-widget")
+local batteryarc_widget = require("awesome-wm-widgets.batteryarc-widget.batteryarc")
+
+
+-- local systray = wibox.widget.systray()
+-- systray:set_horizontal(true)
+-- systray:set_base_size(20)
+-- systray.forced_height = 20
 
 -- {{{ Error handling
 -- Check if awesome encountered an error during startup and fell back to
@@ -150,7 +156,7 @@ local mykeyboardlayout = awful.widget.keyboardlayout()
 
 -- {{{ Wibar
 -- Create a textclock widget
--- local mytextclock = wibox.widget.textclock('<span font="Roboto Mono 12">%I:%M %p</span>')
+local mytextclock = wibox.widget.textclock('<span>%a %b %d, %I:%M %p</span>')
 
 -- Create a wibox for each screen and add it
 local taglist_buttons = gears.table.join(
@@ -218,12 +224,14 @@ awful.screen.connect_for_each_screen(function(s)
   s.mypromptbox = awful.widget.prompt()
   -- Create an imagebox widget which will contain an icon indicating which layout we're using.
   -- We need one layoutbox per screen.
+
   s.mylayoutbox = awful.widget.layoutbox(s)
   s.mylayoutbox:buttons(gears.table.join(
     awful.button({}, 1, function() awful.layout.inc(1) end),
     awful.button({}, 3, function() awful.layout.inc(-1) end),
     awful.button({}, 4, function() awful.layout.inc(1) end),
     awful.button({}, 5, function() awful.layout.inc(-1) end)))
+
   -- Create a taglist widget
   s.mytaglist = awful.widget.taglist {
     screen  = s,
@@ -232,17 +240,17 @@ awful.screen.connect_for_each_screen(function(s)
   }
 
   -- Create a tasklist widget
-  s.mytasklist = awful.widget.tasklist {
-    screen  = s,
-    filter  = awful.widget.tasklist.filter.currenttags,
-    buttons = tasklist_buttons,
-  }
+  -- s.mytasklist = awful.widget.tasklist {
+  --   screen  = s,
+  --   filter  = awful.widget.tasklist.filter.currenttags,
+  --   buttons = tasklist_buttons,
+  --   -- Add spacing between widgets
+  --   --
+  -- }
 
   -- Create the wibox
   -- s.mywibox = awful.wibar({ position = "top", screen = s })
   s.mywibox = awful.wibar({ position = "top", screen = s, bg = beautiful.bg_normal .. "55" })
-
-  -- Add widgets to the wibox
 
   s.mywibox:setup {
     layout = wibox.layout.align.horizontal,
@@ -254,12 +262,32 @@ awful.screen.connect_for_each_screen(function(s)
     },
     s.mytasklist, -- Middle widget
     { -- Right widgets
-      layout = wibox.layout.fixed.horizontal,
       -- systray,
-      -- volume_widget(),
-      -- mytextclock,
-      -- mykeyboardlayout,
-      -- wibox.widget.systray(),
+      spacing = 15,
+      layout = wibox.layout.fixed.horizontal,
+      cpu_widget(),
+      ram_widget(
+        {
+          widget_height = 25,
+          widget_width = 25
+        }
+      ),
+      volume_widget(
+        { widget_type = 'arc' }
+      ),
+      batteryarc_widget(
+        {
+          show_current_level = true,
+          size = 20,
+          show_notification_mode = "on_click"
+        }
+      ),
+      brightness_widget({
+        type = 'arc',
+        program = 'brightnessctl',
+        step = 10,
+      }),
+      mytextclock,
       s.mylayoutbox,
     },
   }
@@ -416,23 +444,28 @@ globalkeys = gears.table.join(
     end,
     { description = 'toggle mute', group = 'hotkeys' }
   ),
+  awful.key({}, "XF86MonBrightnessUp", function() brightness_widget:inc() end,
+    { description = "increase brightness", group = "custom" }),
+  awful.key({}, "XF86MonBrightnessDown", function() brightness_widget:dec() end,
+    { description = "decrease brightness", group = "custom" }),
 
-  awful.key(
-    {},
-    'XF86MonBrightnessUp',
-    function()
-      awful.spawn('brightnessctl set +5%')
-    end,
-    { description = '+5%', group = 'hotkeys' }
-  ),
-  awful.key(
-    {},
-    'XF86MonBrightnessDown',
-    function()
-      awful.spawn('brightnessctl set 5%-')
-    end,
-    { description = '-5%', group = 'hotkeys' }
-  ),
+  -- awful.key(
+  --   {},
+  --   'XF86MonBrightnessUp',
+  --   function()
+  --     awful.spawn('brightnessctl set +5%')
+  --   end,
+  --   { description = '+5%', group = 'hotkeys' }
+  -- ),
+
+  -- awful.key(
+  --   {},
+  --   'XF86MonBrightnessDown',
+  --   function()
+  --     awful.spawn('brightnessctl set 5%-')
+  --   end,
+  --   { description = '-5%', group = 'hotkeys' }
+  -- ),
 
   awful.key({ modkey }, "d", function()
     local tags = awful.screen.focused().tags
@@ -726,4 +759,4 @@ client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_n
 -- Autocommands
 awful.spawn.with_shell("~/.dotfiles/.local/bin/startup")
 awful.spawn.with_shell("~/.screenlayout/Default.sh")
-awful.spawn.with_shell("compton")
+awful.spawn.with_shell("picom")

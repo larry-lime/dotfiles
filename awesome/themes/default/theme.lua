@@ -11,28 +11,45 @@ local themes_path = gfs.get_themes_dir()
 
 local theme = {}
 
-theme.font = "sans 8"
+theme.font = "FiraSans 8"
 
-theme.bg_normal   = "#DD222222"
-theme.bg_focus    = "#DD222222"
-theme.bg_urgent   = "#ff0000"
-theme.bg_minimize = "#444444"
-theme.bg_systray  = theme.bg_normal
+-- Pop!_OS colors
+local colors = {
+    black = "#333333",
+    red = "#CC0000",
+    green = "#4E9A06",
+    yellow = "#C4A000",
+    blue = "#3465A4",
+    magenta = "#75507B",
+    cyan = "#06989A",
+    white = "#D3D7CF",
+    bright_black = "#88807C",
+    bright_red = "#F15D22",
+    bright_green = "#73C48F",
+    bright_yellow = "#FFCE51",
+    bright_blue = "#48B9C7",
+    bright_magenta = "#AD7FA8",
+    bright_cyan = "#34E2E2",
+    bright_white = "#EEEEEC"
+}
 
-theme.fg_normal   = "#aaaaaa"
-theme.fg_focus    = "#ffffff"
-theme.fg_urgent   = "#ffffff"
-theme.fg_minimize = "#ffffff"
+-- Get Pop!_OS color theme
+theme.bg_normal = colors.black
+theme.bg_focus = colors.bright_black
+theme.bg_urgent = colors.bright_cyan
+theme.bg_minimize = "#3B4252"
+theme.bg_systray = theme.bg_normal
 
-theme.useless_gap   = dpi(0)
--- theme.border_width  = dpi(1)
--- theme.border_normal = "#000000"
--- theme.border_focus  = "#535d6c"
-theme.border_width  = dpi(3)
-theme.border_normal = "#252525"
-theme.border_focus  = "#0099CC"
-theme.border_marked = "#91231c"
-theme.useless_gap   = dpi(3)
+theme.fg_normal = colors.white
+theme.fg_focus = colors.bright_white
+theme.fg_urgent = colors.bright_white
+theme.fg_minimize = colors.white
+
+theme.border_width = dpi(2)
+theme.useless_gap = dpi(3)
+theme.border_normal = colors.bright_black
+theme.border_focus = colors.cyan
+theme.border_marked = "#BF616A"
 
 -- There are other variable sets
 -- overriding the default one when
@@ -93,7 +110,8 @@ local function get_wallpaper()
     return wallpaper
 end
 
-theme.wallpaper = "~/.dotfiles/awesome/images/kate-hazen-pop-m3lvin.png"
+-- theme.wallpaper = "~/.dotfiles/awesome/images/kate-hazen-pop-m3lvin.png"
+theme.wallpaper = "~/.dotfiles/awesome/images/nick-nazzaro-ice-cave.png"
 -- theme.wallpaper = get_wallpaper()
 
 -- You can use your own layout icons like this:
