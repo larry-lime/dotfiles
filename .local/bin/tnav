@@ -12,12 +12,14 @@ DIR_7=$HOME/Github-Repos
 DIR_8=$HOME/Research
 DIR_9=$HOME/Work
 
+CWD=$(pwd)
+
 # Add your own project directory paths
 if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
   cd $HOME
   OUTPUT=$(fd . $DIR_1 $DIR_2 $DIR_3 $DIR_4 $DIR_5 $DIR_6 $DIR_7 $DIR_8 $DIR_9\
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
       --preview '
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I "node_modules" --git-ignore {};
@@ -29,7 +31,7 @@ if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
 elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
   OUTPUT=$(fd . $(pwd) \
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
@@ -41,7 +43,7 @@ elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
 else # Argument passed is a file or directory path
   OUTPUT=$(fd . ${@:$#} \
     | fzf\
-      --expect "alt-enter,enter,ctrl-g,ctrl-t" \
+      --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-c" \
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
@@ -60,14 +62,6 @@ if [ -z $BASE_PATH ]; then
   return
 fi
 
-BASE_NAME=$(basename $BASE_PATH)
-PARENT_PATH=$(dirname $BASE_PATH)
-PARENT_NAME=$(basename $PARENT_PATH | tr -d '.')
-PATH_IS_DIR=false
-PATH_IS_FILE=false
-PATH_IS_CONFIG=false
-SESSION_IS_RUNNING=false
-START_TMUX=false
 
 if [[ "$1" = "--tmux" ]]; then
   RUN_TMUX=true
@@ -162,6 +156,8 @@ open_directory ()
     grep_search
   elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
     recursive_search
+  elif [[ "$KEYPRESS" = "ctrl-c" ]]; then
+    cd $CWD
   else
     return
   fi
@@ -201,6 +197,8 @@ open_file ()
     grep_search
   elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
     recursive_search
+  elif [[ "$KEYPRESS" = "ctrl-c" ]]; then
+    cd $CWD
   else
     return
   fi
