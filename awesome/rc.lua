@@ -325,7 +325,7 @@ globalkeys = gears.table.join(
   --     end
   --   end),
 
-  awful.key({ modkey, }, "Tab", awful.tag.history.restore,
+  awful.key({ modkey, }, "Escape", awful.tag.history.restore,
     { description = "go back", group = "tag" }),
 
   awful.key({ modkey, }, "k",
@@ -354,7 +354,7 @@ globalkeys = gears.table.join(
     { description = "focus the previous screen", group = "screen" }),
   awful.key({ modkey, }, "u", awful.client.urgent.jumpto,
     { description = "jump to urgent client", group = "client" }),
-  awful.key({ modkey, }, "Escape",
+  awful.key({ modkey, }, "Tab",
     function()
       awful.client.focus.history.previous()
       if client.focus then
@@ -423,6 +423,9 @@ globalkeys = gears.table.join(
   awful.key({}, "XF86AudioPlay", function() awful.util.spawn("playerctl play-pause") end),
   awful.key({}, "XF86AudioNext", function() awful.util.spawn("playerctl next") end),
   awful.key({}, "XF86AudioPrev", function() awful.util.spawn("playerctl previous") end),
+  -- Suspend
+  -- awful.key({ modkey, "" }, "j", function() awful.screen.focus_relative(1) end,
+  --   { description = "focus the next screen", group = "screen" }),
   -- Volume
   awful.key(
     {},
