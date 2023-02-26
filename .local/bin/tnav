@@ -2,7 +2,7 @@
 
 DIR_1=$HOME/Projects
 DIR_2=$HOME/.dotfiles
-# DIR_3=$HOME/Classes
+DIR_3=$HOME/Dropbox
 DIR_4=$HOME/.local/bin
 DIR_5=$HOME/Documents
 DIR_6=$HOME/Downloads
