@@ -33,9 +33,13 @@ mkdir ~/.dotfiles/tmux/.tmux/plugins/tpm
 git clone https://github.com/tmux-plugins/tpm ~/.dotfiles/tmux/.tmux/plugins/tpm
 
 # Creating Symlinks for files
-ln -s ~/.dotfiles/.fzf.zsh ~/.fzf.zsh
 ln -s ~/.dotfiles/.tmux.conf ~/.tmux.conf
 rm ~/.zshenv ; ln -s ~/.dotfiles/.zshenv ~/.zshenv
+
+# Checking out correct git branchs
+cd ~/.dotfiles/nvim && git checkout ubuntu-arm
+cd ~/.dotfiles/zsh && git checkout ubuntu-arm
+cd ~/.dotfiles/tmux && git checkout ubuntu-arm
 
 # Creating Symlinks for directories
 ln -s ~/.dotfiles/.local/bin ~/.local
