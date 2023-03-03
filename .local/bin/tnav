@@ -1,7 +1,7 @@
 #!/bin/zsh
 
-DIR_1=$HOME/Projects
-DIR_2=$HOME/.dotfiles
+DIR_1=$HOME/.dotfiles
+DIR_2=$HOME/Projects
 DIR_3=$HOME/Classes
 DIR_4=$HOME/.local/bin
 DIR_5=$HOME/Documents
