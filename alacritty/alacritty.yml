@@ -71,11 +71,12 @@ window:
   #   - SimpleFullscreen
   #startup_mode: Windowed
   # Window title
-  opacity: 0.75
+  # opacity: 0.75
+  opacity: 1.00
   # Allow terminal applications to change Alacritty's window title.
   padding:
-    x: 5
-    y: 5
+    x: 3
+    y: 3
   # Window class (Linux/BSD only):
   #class:
   # Application instance name
@@ -155,7 +156,7 @@ font:
     # value specified for the normal font.
     family: HackNerdFontCompleteMNerdFont Nerd Font
     # The `style` can be specified to pick a specific face.
-    style: Regular
+    style: Bold
 
   # Italic font face
   italic:
@@ -182,20 +183,20 @@ font:
   # Offset is the extra space around each character. `offset.y` can be thought
   # of as modifying the line spacing, and `offset.x` as modifying the letter
   # spacing.
-  #offset:
-  #  x: 0
-  #  y: 0
+  offset:
+   x: 1
+   y: 0
   # Glyph offset determines the locations of the glyphs within their cells with
   # the default being at the bottom. Increasing `x` moves the glyph to the
   # right, increasing `y` moves the glyph upward.
-  #glyph_offset:
-  #  x: 0
-  #  y: 0
+  glyph_offset:
+   x: 0
+   y: 1
   # Use built-in font for box drawing characters.
-  #
+  # Use this on MacOS:
+  # defaults write -g AppleFontSmoothing -int 0
   # If `true`, Alacritty will use a custom built-in font for box drawing
   # characters (Unicode points 2500 - 259f).
-  #
   #builtin_box_drawing: true
   # If `true`, bold text is drawn using the bright color variants.
   #draw_bold_text_with_bright_colors: false
@@ -734,7 +735,13 @@ font:
   #
   # If the same trigger is assigned to multiple actions, all of them are executed
   # in the order they were defined in.
-  #key_bindings:
+  key_bindings:
+  - { key: J,        mods: Alt,     chars: "\x1bj"                       }
+  - { key: K,        mods: Alt,     chars: "\x1bk"                       }
+  - { key: H,        mods: Alt,     chars: "\x1bh"                       }
+  - { key: L,        mods: Alt,     chars: "\x1bl"                       }
+  - { key: N,         mods: Alt,       chars: "\x1bn"                       }
+
   #- { key: Paste,                                       action: Paste          }
   #- { key: Copy,                                        action: Copy           }
   #- { key: L,         mods: Control,                    action: ClearLogNotice }
