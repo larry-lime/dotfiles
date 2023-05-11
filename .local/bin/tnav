@@ -11,7 +11,7 @@ DIR_8=$HOME/Research
 DIR_9=$HOME/Work
 
 # Add your own project directory paths
-if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]]; then
+if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]] || [[  ${@:$#} = "-o"  ]] || [[ ${@:$#} = "--open" ]]; then
   OUTPUT=$(fd . $DIR_1 $DIR_2 $DIR_3 $DIR_4 $DIR_5 $DIR_6 $DIR_7 $DIR_8 $DIR_9\
     | fzf\
       --expect "alt-enter,enter,ctrl-g,ctrl-t" \
@@ -65,6 +65,8 @@ START_TMUX=false
 
 if [[ "$1" = "--tmux" ]]; then
   RUN_TMUX=true
+elif [[ "$1" = "--open" ]] || [[ "$1" = "-o" ]]; then
+  SYS_OPEN=true
 else
   RUN_TMUX=false
 fi
@@ -133,7 +135,11 @@ recursive_search ()
 open_directory ()
 {
   if [ "$KEYPRESS" = "enter" ]; then
-    if [[ "$RUN_TMUX" = true ]]; then
+    if [[ "$SYS_OPEN" = true ]]; then
+      cd $BASE_PATH
+      open .
+      return
+    elif [[ "$RUN_TMUX" = true ]]; then
       start_new_session
       if [[ "$PATH_IS_CONFIG" = true ]]; then
         tmux send-keys -t config.0 "$EDITOR" ENTER
@@ -164,7 +170,10 @@ open_directory ()
 open_file ()
 {
   if [ "$KEYPRESS" = "enter" ]; then
-    if [[ "$RUN_TMUX" = true ]]; then
+    if [[ "$SYS_OPEN" = true ]]; then
+      open "$BASE_PATH"
+      return
+    elif [[ "$RUN_TMUX" = true ]]; then
       if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
         open "$BASE_PATH"
         return
@@ -176,6 +185,7 @@ open_file ()
         tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
       fi
       jump_to_open_session
+    # TODO: This doesn't work!
     else
       if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
         open "$BASE_PATH"
