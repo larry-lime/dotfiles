@@ -19,6 +19,8 @@ if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]] || [[  ${@:$#} = "-o"  ]] || [[ ${@:$
       --preview '
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I "node_modules" --git-ignore {};
+      elif [[ {} == *.pdf ]]; then
+        pdftotext -l 10 -nopgbrk -q {} -;
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi'\
@@ -31,6 +33,8 @@ elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
+      elif [[ {} == *.pdf ]]; then
+        pdftotext -l 10 -nopgbrk -q {} -;
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi"\
@@ -43,6 +47,8 @@ else # Argument passed is a file or directory path
       --preview "
       if [ -d {} ]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
+      elif [[ {} == *.pdf ]]; then
+        pdftotext -l 10 -nopgbrk -q {} -;
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi"\
