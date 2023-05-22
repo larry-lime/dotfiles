@@ -180,7 +180,7 @@ font:
     style: Bold Italic
 
   # Point size
-  size: 14.0
+  size: 11.0
   # Offset is the extra space around each character. `offset.y` can be thought
   # of as modifying the line spacing, and `offset.x` as modifying the letter
   # spacing.
@@ -416,7 +416,7 @@ font:
   # from `0.0` to `1.0`.
   #thickness: 0.15
   # Live config reload (changes require restart)
-  #live_config_reload: true
+  live_config_reload: true
   # Shell
   #
   # You can set `shell.program` to the path of your favorite shell, e.g.
