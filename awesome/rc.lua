@@ -498,7 +498,7 @@ globalkeys = gears.table.join(
     { description = "run slack", group = "launcher" }),
   awful.key({ modkey, "Shift" }, "z", function() awful.spawn("zoom") end,
     { description = "run slack", group = "launcher" }),
-  awful.key({ modkey }, "spacr",
+  awful.key({ modkey }, "space",
     function() awful.spawn("rofi -combi-modi window,drun,run -matching fuzzy -show combi") end,
     { description = "run rofi", group = "launcher" })
 )
