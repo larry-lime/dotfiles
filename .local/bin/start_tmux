@@ -1,0 +1,22 @@
+#!/bin/zsh
+
+# If there is an existing
+run_tmux=false
+if [[ -z $TMUX ]]; then
+  tmux new-session -d
+  run_tmux=true
+fi
+
+tmux rename-session -t 0 config
+# close current window
+tmux rename-window 'nvim'
+tmux send-keys -t config:nvim "cd $HOME/.dotfiles/nvim && nvim" C-m
+tmux neww -n 'zsh' -c "$HOME/.dotfiles/zsh"
+tmux neww -n 'tmux' -c "$HOME/.dotfiles/tmux"
+tmux send-keys -t config:zsh "nvim" C-m
+tmux send-keys -t config:tmux "nvim" C-m
+
+# If run_tmux is true
+if $run_tmux; then
+  tmux attach
+fi

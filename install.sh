@@ -1,6 +1,9 @@
 # Install Zsh
 sudo apt update
 sudo apt install zsh cargo
+# Install Essential Tools
+xcode-select --install
+brew install fzf bat gh fd ripgrep exa tmux node neovim kitty
 
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
