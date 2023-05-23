@@ -18,9 +18,14 @@ if [[ -z $1 ]] || [[ ${@:$#} = "--tmux" ]] || [[  ${@:$#} = "-o"  ]] || [[ ${@:$
       --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-o" \
       --preview '
       if [ -d {} ]; then
-        exa -T -L 2 --icons --group-directories-first -I "node_modules" --git-ignore {};
+        exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
       elif [[ {} == *.pdf ]]; then
         pdftotext -l 10 -nopgbrk -q {} -;
+      elif [[ {} == *.png ]] || [[ {} == *.jpg ]] || [[ {} == *.jpeg ]]; then
+        imgcat {};
+      # docxs files
+      elif [[ {} == *.docx ]]; then
+        textutil -stdout -cat txt {} | bat --style=numbers --color=always --line-range :500;
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi'\
@@ -35,6 +40,11 @@ elif [[  ${@:$#} = "-r"  ]] || [[  ${@:$#} = "--relative"  ]]; then
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
       elif [[ {} == *.pdf ]]; then
         pdftotext -l 10 -nopgbrk -q {} -;
+      elif [[ {} == *.png ]] || [[ {} == *.jpg ]] || [[ {} == *.jpeg ]]; then
+        imgcat {};
+      # docxs files
+      elif [[ {} == *.docx ]]; then
+        textutil -stdout -cat txt {};
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi"\
@@ -49,6 +59,11 @@ else # Argument passed is a file or directory path
         exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {};
       elif [[ {} == *.pdf ]]; then
         pdftotext -l 10 -nopgbrk -q {} -;
+      elif [[ {} == *.png ]] || [[ {} == *.jpg ]] || [[ {} == *.jpeg ]]; then
+        imgcat {};
+      # docxs files
+      elif [[ {} == *.docx ]]; then
+        textutil -stdout -cat txt {};
       else
         bat --style=numbers --color=always --line-range :500 {};
       fi"\
