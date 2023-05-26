@@ -71,7 +71,7 @@ window:
   #   - SimpleFullscreen
   #startup_mode: Windowed
   # Window title
-  opacity: 0.75
+  opacity: 1.00
   # Allow terminal applications to change Alacritty's window title.
   padding:
     x: 3
