@@ -72,7 +72,7 @@ window:
   #startup_mode: Windowed
   # Window title
   # opacity: 0.75
-  opacity: 1.00
+  opacity: 0.75
   # Allow terminal applications to change Alacritty's window title.
   padding:
     x: 3
