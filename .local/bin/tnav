@@ -4,7 +4,7 @@ typeset -a DIRS
 
 while IFS= read -r line; do
     DIRS+=("$HOME/$line")
-done < tnav_dirs.txt
+done < $HOME/.dotfiles/.local/bin/tnav_dirs.txt
 
 preview_logic() {
     if [ -d {} ]; then
@@ -19,7 +19,7 @@ preview_logic() {
 }
 
 fzf_call() {
-    fd . "$1"\
+    fd . "$@"\
         | fzf\
         --expect "alt-enter,enter,ctrl-g,ctrl-t,ctrl-o"\
         --preview "$(typeset -f preview_logic); preview_logic"\
@@ -55,8 +55,10 @@ elif [[ $LAST_ARG =~ ^(-g|--grep)$ ]]; then
         | xargs echo)
 elif [[  ${@:$#} = "-h"  ]] || [[  ${@:$#} = "--help"  ]]; then
     echo "Usage: tnav [OPTION]... [FILE]..."
+    return
 else # Argument passed is a file or directory path
     echo "Invalid argument passed"
+    return
 fi
 
 read -r KEYPRESS BASE_PATH <<< "${OUTPUT}"
