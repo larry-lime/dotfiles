@@ -1,8 +1,8 @@
-$HOME/.dotfiles
-$HOME/Projects
-$HOME/Classes
-$HOME/.local/bin
-$HOME/Documents
-$HOME/Downloads
-$HOME/Dropbox
-$HOME/Work
+.dotfiles
+Projects
+Classes
+.local/bin
+Documents
+Downloads
+Dropbox
+Work
