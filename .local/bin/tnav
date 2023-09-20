@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-typeset -a DIRS
+DIRS=()
 
 while IFS= read -r line; do
     DIRS+=("$HOME/$line")
