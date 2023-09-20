@@ -4,7 +4,7 @@ DIRS=()
 
 while IFS= read -r line; do
     DIRS+=("$HOME/$line")
-done < $HOME/.dotfiles/.local/bin/tnav_dirs.txt
+done < $HOME/.local/bin/tnav_dirs.txt
 
 preview_logic() {
     if [ -d {} ]; then
@@ -74,27 +74,13 @@ PATH_IS_DIR=false
 PATH_IS_FILE=false
 PATH_IS_CONFIG=false
 SESSION_IS_RUNNING=false
-START_TMUX=false
 
-if [[ "$1" = "--tmux" ]]; then
-    RUN_TMUX=true
-elif [[ "$1" = "--open" ]] || [[ "$1" = "-o" ]]; then
+if [[ "$1" = "--open" ]] || [[ "$1" = "-o" ]]; then
     SYS_OPEN=true
-else
-    RUN_TMUX=false
-fi
-
-if [[ -z "$TMUX" ]] && [[ -z $@ ]]; then
-    RUN_TMUX=true
-    START_TMUX=true
 fi
 
 start_new_session ()
 {
-    if [[ "$START_TMUX" = true ]]; then
-        tmux start-server
-    fi
-
     if [[ "$PATH_IS_DIR" = true ]]; then
         if [[ "$BASE_NAME" = "zsh" ]] || [[ "$BASE_NAME" = "nvim" ]] || [[ "$BASE_NAME" = "tmux" ]]; then
             PATH_IS_CONFIG=true
@@ -137,12 +123,7 @@ recursive_search ()
     fi
 
     cd $(dirname $search_path)
-
-    if [[ "$RUN_TMUX" = true ]]; then
-        source $HOME/.local/bin/tnav --tmux $relative_path
-    else
-        source $HOME/.local/bin/tnav $relative_path
-    fi
+    source $HOME/.local/bin/tnav -r $relative_path
 }
 
 open_directory ()
@@ -152,25 +133,12 @@ open_directory ()
             cd $BASE_PATH
             open .
             return
-        elif [[ "$RUN_TMUX" = true ]]; then
-            start_new_session
-            if [[ "$PATH_IS_CONFIG" = true ]]; then
-                tmux send-keys -t config.0 "$EDITOR" ENTER
-            else
-                tmux send-keys -t $BASE_NAME.0 "$EDITOR" ENTER
-            fi
-            jump_to_open_session
         else
             cd $BASE_PATH
             $EDITOR
         fi
     elif [[ "$KEYPRESS" = "alt-enter" ]]; then
-        if [[ "$RUN_TMUX" = true ]]; then
-            start_new_session
-            jump_to_open_session
-        else
-            cd $BASE_PATH
-        fi
+        cd $BASE_PATH
     elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
         grep_search
     elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
@@ -188,19 +156,6 @@ open_file ()
         if [[ "$SYS_OPEN" = true ]]; then
             open "$BASE_PATH"
             return
-        elif [[ "$RUN_TMUX" = true ]]; then
-            if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
-                open "$BASE_PATH"
-                return
-            fi
-            start_new_session
-            if [[ "$PATH_IS_CONFIG" = true ]]; then
-                tmux send-keys -t config.0 "$EDITOR $BASE_NAME" ENTER
-            else
-                tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
-            fi
-            jump_to_open_session
-            # TODO: This doesn't work! Consider removing it
         else
             if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
                 open "$BASE_PATH"
@@ -210,12 +165,7 @@ open_file ()
             fi
         fi
     elif [[ "$KEYPRESS" = "alt-enter" ]]; then
-        if [[ "$RUN_TMUX" = true ]]; then
-            start_new_session
-            jump_to_open_session
-        else
-            cd $PARENT_PATH
-        fi
+        cd $PARENT_PATH
     elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
         grep_search
     elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
@@ -253,10 +203,6 @@ grep_search () {
         | xargs echo)
 
     if [ ! -z "$output" ]; then
-        if [[ "$RUN_TMUX" = true ]]; then
-            start_new_session
-        fi
-    else
         return
     fi
 
@@ -264,31 +210,16 @@ grep_search () {
     line_number=${line%% *}
     parent_path=$(dirname $file_path)
 
-    if [[ "$RUN_TMUX" = true ]]; then
-        if [[ "$keypress" = "enter" ]]; then
-            tmux send-keys -t $session_name.0 "$EDITOR -c ':$line_number norm zz' $file_path" ENTER
-        elif [[ "$keypress" = "alt-enter" ]]; then
-            if [[ "$parent_path" != "$grep_name" ]]; then
-                relative_path=${parent_path#"$grep_name"}
-                relative_path="${relative_path:1}"
-                tmux send-keys -t $session_name.0 "cd $relative_path" ENTER
-            fi
-        else
-            return
+    if [[ "$keypress" = "enter" ]]; then
+        $EDITOR -c ":$line_number norm zz" $file_path
+    elif [[ "$keypress" = "alt-enter" ]]; then
+        if [[ "$parent_path" != "$grep_name" ]]; then
+            relative_path=${parent_path#"$grep_name"}
+            relative_path="${relative_path:1}"
+            cd $relative_path
         fi
-        jump_to_open_session
     else
-        if [[ "$keypress" = "enter" ]]; then
-            $EDITOR -c ":$line_number norm zz" $file_path
-        elif [[ "$keypress" = "alt-enter" ]]; then
-            if [[ "$parent_path" != "$grep_name" ]]; then
-                relative_path=${parent_path#"$grep_name"}
-                relative_path="${relative_path:1}"
-                cd $relative_path
-            fi
-        else
-            return
-        fi
+        return
     fi
 }
 
