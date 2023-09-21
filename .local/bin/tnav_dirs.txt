@@ -6,3 +6,4 @@ Documents
 Downloads
 Dropbox
 Work
+Scripts
