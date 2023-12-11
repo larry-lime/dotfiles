@@ -1,6 +1,5 @@
 .dotfiles
 Projects
-Classes
 .local/bin
 Documents
 Downloads

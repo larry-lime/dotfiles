@@ -80,7 +80,7 @@ START_TMUX=false
 if [[ $LAST_ARG = "--tmux" ]]; then
     RUN_TMUX=true
 
-elif [[$1 =~ ^(|-o|--open)$ ]]; then
+elif [[ $1 =~ ^(-o|--open)$ ]]; then
     SYS_OPEN=true
 
 else

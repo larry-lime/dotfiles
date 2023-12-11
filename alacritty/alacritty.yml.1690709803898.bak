@@ -179,7 +179,7 @@ font:
     style: Bold Italic
 
   # Point size
-  size: 14.0
+  size: 13.0
   # Offset is the extra space around each character. `offset.y` can be thought
   # of as modifying the line spacing, and `offset.x` as modifying the letter
   # spacing.
@@ -929,8 +929,8 @@ font:
     #- { key: F,              mods: Command|Control,            action: ToggleFullscreen      }
     #- { key: F,              mods: Command, mode: ~Search,     action: SearchForward         }
     #- { key: B,              mods: Command, mode: ~Search,     action: SearchBackward        }
-    - { key: Tab, mods: Control, chars: "\x1b[27;5;9~" }
-    - { key: Tab, mods: Control|Shift, chars: "\x1b[27;6;9~" }
+    - { key: Tab, mods: Control, chars: "\e[27;5;9~" }
+    - { key: Tab, mods: Control|Shift, chars: "\e[27;6;9~" }
   #debug:
   # Display the time it takes to redraw each frame.
   #render_timer: false
@@ -958,36 +958,36 @@ font:
 colors:
   # Default colors
   primary:
-    background: "0x1E1D2F"
-    foreground: "0xD9E0EE"
+    background: '0x1E1D2F'
+    foreground: '0xD9E0EE'
 
   cursor:
-    text: "0x1E1D2F"
-    cursor: "0xF5E0DC"
+    text: '0x1E1D2F'
+    cursor: '0xF5E0DC'
 
   # Normal colors
   normal:
-    black: "0x6E6C7E"
-    red: "0xF28FAD"
-    green: "0xABE9B3"
-    yellow: "0xFAE3B0"
-    blue: "0x96CDFB"
-    magenta: "0xF5C2E7"
-    cyan: "0x89DCEB"
-    white: "0xD9E0EE"
+    black: '0x6E6C7E'
+    red: '0xF28FAD'
+    green: '0xABE9B3'
+    yellow: '0xFAE3B0'
+    blue: '0x96CDFB'
+    magenta: '0xF5C2E7'
+    cyan: '0x89DCEB'
+    white: '0xD9E0EE'
 
   # Bright colors
   bright:
-    black: "0x988BA2"
-    red: "0xF28FAD"
-    green: "0xABE9B3"
-    yellow: "0xFAE3B0"
-    blue: "0x96CDFB"
-    magenta: "0xF5C2E7"
-    cyan: "0x89DCEB"
-    white: "0xD9E0EE"
+    black: '0x988BA2'
+    red: '0xF28FAD'
+    green: '0xABE9B3'
+    yellow: '0xFAE3B0'
+    blue: '0x96CDFB'
+    magenta: '0xF5C2E7'
+    cyan: '0x89DCEB'
+    white: '0xD9E0EE'
 
   indexed_colors:
-    - { index: 16, color: "0xF8BD96" }
-    - { index: 17, color: "0xF5E0DC" }
+    - { index: 16, color: '0xF8BD96' }
+    - { index: 17, color: '0xF5E0DC' }
 theme: Catppuccin
