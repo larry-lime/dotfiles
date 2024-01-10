@@ -1,4 +1,5 @@
 #!/bin/zsh
+# TODO: Move tnav to its own repo so it's not dotfile specific
 
 DIRS=()
 
@@ -140,7 +141,7 @@ recursive_search ()
         relative_path="$PARENT_NAME"
     fi
 
-    z $(dirname $search_path)
+    cd $(dirname $search_path)
 
     if [[ "$RUN_TMUX" = true ]]; then
         source $HOME/.local/bin/tnav --path $relative_path --tmux
@@ -153,7 +154,7 @@ open_directory ()
 {
     if [ "$KEYPRESS" = "enter" ]; then
         if [[ "$SYS_OPEN" = true ]]; then
-            z $BASE_PATH
+            cd $BASE_PATH
             open .
             return
         elif [[ "$RUN_TMUX" = true ]]; then
@@ -165,7 +166,7 @@ open_directory ()
             fi
             jump_to_open_session
         else
-            z $BASE_PATH
+            cd $BASE_PATH
             $EDITOR
         fi
     elif [[ "$KEYPRESS" = "alt-enter" ]]; then
@@ -173,7 +174,7 @@ open_directory ()
             start_new_session
             jump_to_open_session
         else
-            z $BASE_PATH
+            cd $BASE_PATH
         fi
     elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
         grep_search
@@ -209,7 +210,7 @@ open_file ()
             if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
                 open "$BASE_PATH"
             else
-                z $PARENT_PATH
+                cd $PARENT_PATH
                 $EDITOR $BASE_NAME
             fi
         fi
@@ -218,7 +219,7 @@ open_file ()
             start_new_session
             jump_to_open_session
         else
-            z $PARENT_PATH
+            cd $PARENT_PATH
         fi
     elif [[ "$KEYPRESS" = "ctrl-g" ]]; then
         grep_search
@@ -288,7 +289,7 @@ grep_search () {
             if [[ "$parent_path" != "$grep_name" ]]; then
                 relative_path=${parent_path#"$grep_name"}
                 relative_path="${relative_path:1}"
-                z $relative_path
+                cd $relative_path
             fi
         else
             return
