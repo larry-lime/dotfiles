@@ -15,22 +15,22 @@ theme.font = "FiraSans 8"
 
 -- Pop!_OS colors
 local colors = {
-    black = "#333333",
-    red = "#CC0000",
-    green = "#4E9A06",
-    yellow = "#C4A000",
-    blue = "#3465A4",
-    magenta = "#75507B",
-    cyan = "#06989A",
-    white = "#D3D7CF",
-    bright_black = "#88807C",
-    bright_red = "#F15D22",
-    bright_green = "#73C48F",
-    bright_yellow = "#FFCE51",
-    bright_blue = "#48B9C7",
-    bright_magenta = "#AD7FA8",
-    bright_cyan = "#34E2E2",
-    bright_white = "#EEEEEC"
+	black = "#333333",
+	red = "#CC0000",
+	green = "#4E9A06",
+	yellow = "#C4A000",
+	blue = "#3465A4",
+	magenta = "#75507B",
+	cyan = "#06989A",
+	white = "#D3D7CF",
+	bright_black = "#88807C",
+	bright_red = "#F15D22",
+	bright_green = "#73C48F",
+	bright_yellow = "#FFCE51",
+	bright_blue = "#48B9C7",
+	bright_magenta = "#AD7FA8",
+	bright_cyan = "#34E2E2",
+	bright_white = "#EEEEEC",
 }
 
 -- Get Pop!_OS color theme
@@ -66,12 +66,8 @@ theme.border_marked = "#BF616A"
 
 -- Generate taglist squares:
 local taglist_square_size = dpi(4)
-theme.taglist_squares_sel = theme_assets.taglist_squares_sel(
-    taglist_square_size, theme.fg_normal
-)
-theme.taglist_squares_unsel = theme_assets.taglist_squares_unsel(
-    taglist_square_size, theme.fg_normal
-)
+theme.taglist_squares_sel = theme_assets.taglist_squares_sel(taglist_square_size, theme.fg_normal)
+theme.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size, theme.fg_normal)
 
 -- Variables set for theming notifications:
 -- notification_font
@@ -83,8 +79,8 @@ theme.taglist_squares_unsel = theme_assets.taglist_squares_unsel(
 -- menu_[bg|fg]_[normal|focus]
 -- menu_[border_color|border_width]
 theme.menu_submenu_icon = themes_path .. "default/submenu.png"
-theme.menu_height       = dpi(15)
-theme.menu_width        = dpi(100)
+theme.menu_height = dpi(15)
+theme.menu_width = dpi(100)
 
 -- You can add as many variables as
 -- you wish and access them by using
@@ -93,44 +89,44 @@ theme.menu_width        = dpi(100)
 
 -- Define the image to load
 local function get_wallpaper()
-    local wallpaper_dir = os.getenv("HOME") .. "/.config/awesome/images/"
-    local wallpaper_list = {}
-    local wallpaper = nil
+	local wallpaper_dir = os.getenv("HOME") .. "/.config/awesome/images/"
+	local wallpaper_list = {}
+	local wallpaper = nil
 
-    for file in io.popen("ls -A " .. wallpaper_dir):lines() do
-        table.insert(wallpaper_list, file)
-    end
+	for file in io.popen("ls -A " .. wallpaper_dir):lines() do
+		table.insert(wallpaper_list, file)
+	end
 
-    math.randomseed(os.time())
+	math.randomseed(os.time())
 
-    if #wallpaper_list > 0 then
-        wallpaper = wallpaper_dir .. wallpaper_list[math.random(#wallpaper_list)]
-    end
+	if #wallpaper_list > 0 then
+		wallpaper = wallpaper_dir .. wallpaper_list[math.random(#wallpaper_list)]
+	end
 
-    return wallpaper
+	return wallpaper
 end
 
 -- theme.wallpaper = "~/.dotfiles/awesome/images/kate-hazen-pop-m3lvin.png"
-theme.wallpaper = "~/.dotfiles/awesome/images/nick-nazzaro-ice-cave.png"
+theme.wallpaper = "/home/larrylime/.dotfiles/awesome/images/nasa-53884.jpg"
 -- theme.wallpaper = get_wallpaper()
 
 -- You can use your own layout icons like this:
-theme.layout_fairh      = themes_path .. "default/layouts/fairhw.png"
-theme.layout_fairv      = themes_path .. "default/layouts/fairvw.png"
-theme.layout_floating   = themes_path .. "default/layouts/floatingw.png"
-theme.layout_magnifier  = themes_path .. "default/layouts/magnifierw.png"
-theme.layout_max        = themes_path .. "default/layouts/maxw.png"
+theme.layout_fairh = themes_path .. "default/layouts/fairhw.png"
+theme.layout_fairv = themes_path .. "default/layouts/fairvw.png"
+theme.layout_floating = themes_path .. "default/layouts/floatingw.png"
+theme.layout_magnifier = themes_path .. "default/layouts/magnifierw.png"
+theme.layout_max = themes_path .. "default/layouts/maxw.png"
 theme.layout_fullscreen = themes_path .. "default/layouts/fullscreenw.png"
 theme.layout_tilebottom = themes_path .. "default/layouts/tilebottomw.png"
-theme.layout_tileleft   = themes_path .. "default/layouts/tileleftw.png"
-theme.layout_tile       = themes_path .. "default/layouts/tilew.png"
-theme.layout_tiletop    = themes_path .. "default/layouts/tiletopw.png"
-theme.layout_spiral     = themes_path .. "default/layouts/spiralw.png"
-theme.layout_dwindle    = themes_path .. "default/layouts/dwindlew.png"
-theme.layout_cornernw   = themes_path .. "default/layouts/cornernww.png"
-theme.layout_cornerne   = themes_path .. "default/layouts/cornernew.png"
-theme.layout_cornersw   = themes_path .. "default/layouts/cornersww.png"
-theme.layout_cornerse   = themes_path .. "default/layouts/cornersew.png"
+theme.layout_tileleft = themes_path .. "default/layouts/tileleftw.png"
+theme.layout_tile = themes_path .. "default/layouts/tilew.png"
+theme.layout_tiletop = themes_path .. "default/layouts/tiletopw.png"
+theme.layout_spiral = themes_path .. "default/layouts/spiralw.png"
+theme.layout_dwindle = themes_path .. "default/layouts/dwindlew.png"
+theme.layout_cornernw = themes_path .. "default/layouts/cornernww.png"
+theme.layout_cornerne = themes_path .. "default/layouts/cornernew.png"
+theme.layout_cornersw = themes_path .. "default/layouts/cornersww.png"
+theme.layout_cornerse = themes_path .. "default/layouts/cornersew.png"
 
 -- Define the icon theme for application icons. If not set then the icons
 -- from /usr/share/icons and /usr/share/icons/hicolor will be used.

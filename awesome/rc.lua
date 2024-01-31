@@ -475,10 +475,10 @@ globalkeys = gears.table.join(
 		awful.spawn("amixer -D pulse set Master 1+ toggle")
 	end, { description = "toggle mute", group = "hotkeys" }),
 	awful.key({}, "XF86MonBrightnessUp", function()
-		brightness_widget:inc()
+		awful.spawn("brightnessctl set +5%")
 	end, { description = "increase brightness", group = "custom" }),
 	awful.key({}, "XF86MonBrightnessDown", function()
-		brightness_widget:dec()
+		awful.spawn("brightnessctl set 5%-")
 	end, { description = "decrease brightness", group = "custom" }),
 
 	-- awful.key(
