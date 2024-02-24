@@ -1,0 +1,10 @@
+directories:
+  - .dotfiles
+  - Projects
+  - .local/bin
+  - Documents
+  - Downloads
+  - Dropbox
+  - Work
+  - Scripts
+  - Classes
