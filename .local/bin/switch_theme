@@ -20,6 +20,7 @@ switch_to_dark_mode() {
 
   # Update Neovim colorscheme
   sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
+  tmux send-keys -t {pane_id} C-r  # Simulate Ctrl+r in Neovim
 
   # Update Tmux colorscheme
   sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
@@ -42,7 +43,6 @@ switch_to_light_mode() {
 
   # Update Tmux colorscheme
   sed -i '' "s/set -g @catppuccin_flavour 'macchiato'/set -g @catppuccin_flavour 'latte'/" $TMUX_CONFIG
-  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
 
   # Update FZF colorscheme
   sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_LIGHT_OPTS|" $FZF_CONFIG
@@ -55,9 +55,13 @@ switch_to_light_mode() {
 if [[ "$TERMINAL_THEME" == "light" ]]; then
   switch_to_dark_mode
   export TERMINAL_THEME="dark"
+  tmux set-environment -g TERMINAL_THEME dark
   sed -i '' 's/export TERMINAL_THEME="light"/export TERMINAL_THEME="dark"/' $MACOS_CONFIG
+  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
 else
   switch_to_light_mode
   export TERMINAL_THEME="light"
   sed -i '' 's/export TERMINAL_THEME="dark"/export TERMINAL_THEME="light"/' $MACOS_CONFIG
+  tmux set-environment -g TERMINAL_THEME light
+  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
 fi
