@@ -1,0 +1,66 @@
+#!/bin/zsh
+
+# Define paths to your configuration files
+NEOVIM_CONFIG="$HOME/.config/nvim/lua/plugins/colorsheme.lua"
+TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
+FZF_CONFIG="$HOME/.config/zsh/colors.zsh"
+TNAV_CONFIG="$HOME/.local/bin/tnav"
+
+# Function to switch to dark mode
+switch_to_dark_mode() {
+  echo "Switching to dark mode..."
+
+  # Update Kitty colorscheme
+  kitten themes Catppuccin-Macchiato
+
+  # Update Neovim colorscheme
+  sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
+
+  # Update Tmux colorscheme
+  sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'mocha'/" $TMUX_CONFIG
+
+  # Update FZF colorscheme
+  sed -i '' 's/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/' $FZF_CONFIG
+
+  # Update Tnav colorscheme
+  sed -i '' 's/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/' $TNAV_CONFIG
+
+  # Source Tmux
+  tmux source-file ~/.tmux.conf
+
+  echo "Dark mode activated."
+}
+
+# Function to switch to light mode
+switch_to_light_mode() {
+  echo "Switching to light mode..."
+
+  # Update Kitty colorscheme
+  kitten themes Catppuccin-Latte
+
+  # Update Neovim colorscheme
+  sed -i '' 's/flavour = "macchiato",/flavour = "latte",/' $NEOVIM_CONFIG
+
+  # Update Tmux colorscheme
+  sed -i '' "s/set -g @catppuccin_flavour 'mocha'/set -g @catppuccin_flavour 'latte'/" $TMUX_CONFIG
+
+  # Update FZF colorscheme
+  sed -i '' 's/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/' $FZF_CONFIG
+
+  # Update Tnav colorscheme
+  sed -i '' 's/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/' $TNAV_CONFIG
+
+  # Source Tmux
+  tmux source-file ~/.tmux.conf
+
+  echo "Light mode activated."
+}
+
+# Check command line argument
+if [[ "$1" == "dark" ]]; then
+  switch_to_dark_mode
+elif [[ "$1" == "light" ]]; then
+  switch_to_light_mode
+else
+  echo "Usage: $0 {dark|light}"
+fi
