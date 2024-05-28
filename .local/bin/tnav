@@ -1,14 +1,6 @@
 #!/bin/zsh
 
-# FZF_DEFAULT_OPTS=" \
-# --color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 \
-# --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 \
-# --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
-
-FZF_DEFAULT_OPTS=" \
-    --color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 \
-    --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 \
-    --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39"
+export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
 # List of required commands
 required_commands=("yq" "fd" "fzf-tmux" "exa" "pdftotext" "textutil" "bat" "tmux" "rg" "awk" "open")

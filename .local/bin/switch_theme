@@ -1,15 +1,20 @@
 #!/bin/zsh
 
 # Define paths to your configuration files
-NEOVIM_CONFIG="$HOME/.config/nvim/lua/plugins/colorsheme.lua"
+NEOVIM_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
 TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
 FZF_CONFIG="$HOME/.config/zsh/colors.zsh"
 TNAV_CONFIG="$HOME/.local/bin/tnav"
+MACOS_CONFIG="$HOME/.dotfiles/zsh/macos_config.zsh"
+
+# Dark mode FZF and Tnav options
+FZF_DARK_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796\""
+
+# Light mode FZF and Tnav options
+FZF_LIGHT_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39 --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39\""
 
 # Function to switch to dark mode
 switch_to_dark_mode() {
-  echo "Switching to dark mode..."
-
   # Update Kitty colorscheme
   kitten themes Catppuccin-Macchiato
 
@@ -17,24 +22,18 @@ switch_to_dark_mode() {
   sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
 
   # Update Tmux colorscheme
-  sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'mocha'/" $TMUX_CONFIG
+  sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
+  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
 
   # Update FZF colorscheme
-  sed -i '' 's/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/' $FZF_CONFIG
+  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
 
   # Update Tnav colorscheme
-  sed -i '' 's/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/' $TNAV_CONFIG
-
-  # Source Tmux
-  tmux source-file ~/.tmux.conf
-
-  echo "Dark mode activated."
+  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
 }
 
 # Function to switch to light mode
 switch_to_light_mode() {
-  echo "Switching to light mode..."
-
   # Update Kitty colorscheme
   kitten themes Catppuccin-Latte
 
@@ -42,25 +41,23 @@ switch_to_light_mode() {
   sed -i '' 's/flavour = "macchiato",/flavour = "latte",/' $NEOVIM_CONFIG
 
   # Update Tmux colorscheme
-  sed -i '' "s/set -g @catppuccin_flavour 'mocha'/set -g @catppuccin_flavour 'latte'/" $TMUX_CONFIG
+  sed -i '' "s/set -g @catppuccin_flavour 'macchiato'/set -g @catppuccin_flavour 'latte'/" $TMUX_CONFIG
+  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
 
   # Update FZF colorscheme
-  sed -i '' 's/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/' $FZF_CONFIG
+  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_LIGHT_OPTS|" $FZF_CONFIG
 
   # Update Tnav colorscheme
-  sed -i '' 's/bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796/bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39/' $TNAV_CONFIG
-
-  # Source Tmux
-  tmux source-file ~/.tmux.conf
-
-  echo "Light mode activated."
+  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_LIGHT_OPTS|" $TNAV_CONFIG
 }
 
-# Check command line argument
-if [[ "$1" == "dark" ]]; then
+# Function to toggle mode
+if [[ "$TERMINAL_THEME" == "light" ]]; then
   switch_to_dark_mode
-elif [[ "$1" == "light" ]]; then
-  switch_to_light_mode
+  export TERMINAL_THEME="dark"
+  sed -i '' 's/export TERMINAL_THEME="light"/export TERMINAL_THEME="dark"/' $MACOS_CONFIG
 else
-  echo "Usage: $0 {dark|light}"
+  switch_to_light_mode
+  export TERMINAL_THEME="light"
+  sed -i '' 's/export TERMINAL_THEME="dark"/export TERMINAL_THEME="light"/' $MACOS_CONFIG
 fi
