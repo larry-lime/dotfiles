@@ -1,11 +1,14 @@
 #!/bin/zsh
 
+source ~/.config/zsh/macos_config.zsh
+
 # Define paths to your configuration files
 NEOVIM_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
 TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
 FZF_CONFIG="$HOME/.config/zsh/colors.zsh"
 TNAV_CONFIG="$HOME/.local/bin/tnav"
 MACOS_CONFIG="$HOME/.dotfiles/zsh/macos_config.zsh"
+ALACRITTY_CONFIG="$HOME/.dotfiles/alacritty/alacritty.toml"
 
 # Dark mode FZF and Tnav options
 FZF_DARK_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796\""
@@ -15,28 +18,55 @@ FZF_LIGHT_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#ccd0da,bg:#eff1f5,spinner
 
 # Function to switch to dark mode
 switch_to_dark_mode() {
-  # Update Kitty colorscheme
-  kitten themes Catppuccin-Macchiato
+	# Update Kitty colorscheme
+	kitten themes Catppuccin-Macchiato
 
-  # Update Neovim colorscheme
-  sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
-  tmux send-keys -t {pane_id} C-r  # Simulate Ctrl+r in Neovim
+	# Update Alacritty colorscheme
+  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-latte.toml"|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|' "$ALACRITTY_CONFIG"
 
-  # Update Tmux colorscheme
-  sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
-  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
+	# Update Neovim colorscheme
+	sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
 
-  # Update FZF colorscheme
-  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
+	# Update Tmux colorscheme
+	sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
+	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 
-  # Update Tnav colorscheme
-  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
+	# Update FZF colorscheme
+	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
+
+	# Update Tnav colorscheme
+	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
 }
 
 # Function to switch to light mode
 switch_to_light_mode() {
-  # Update Kitty colorscheme
-  kitten themes Catppuccin-Latte
+	# Update Kitty colorscheme
+	kitten themes Catppuccin-Latte
+
+	# Update Alacritty colorscheme
+  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|"~/.config/alacritty/themes/catppuccin-latte.toml"|' "$ALACRITTY_CONFIG"
+
+	# Update Neovim colorscheme
+	sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
+
+	# Update Tmux colorscheme
+	sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
+	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
+
+	# Update FZF colorscheme
+	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
+
+	# Update Tnav colorscheme
+	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
+}
+
+# Function to switch to light mode
+switch_to_light_mode() {
+	# Update Kitty colorscheme
+	kitten themes Catppuccin-Latte
+
+	# Update Alacritty colorscheme
+  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-latte.toml"|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|' "$ALACRITTY_CONFIG"
 
   # Update Neovim colorscheme
   sed -i '' 's/flavour = "macchiato",/flavour = "latte",/' $NEOVIM_CONFIG
