@@ -22,20 +22,20 @@ switch_to_dark_mode() {
 	kitten themes Catppuccin-Macchiato
 
 	# Update Alacritty colorscheme
-  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-latte.toml"|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|' "$ALACRITTY_CONFIG"
+	sd '~/.config/alacritty/themes/catppuccin-latte.toml' '~/.config/alacritty/themes/catppuccin-macchiato.toml' $ALACRITTY_CONFIG
 
 	# Update Neovim colorscheme
-	sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
+	sd 'flavour = "latte",' 'flavour = "macchiato",' $NEOVIM_CONFIG
 
 	# Update Tmux colorscheme
-	sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
+	sd "set -g @catppuccin_flavour 'latte'" "set -g @catppuccin_flavour 'macchiato'" $TMUX_CONFIG
 	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 
 	# Update FZF colorscheme
-	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
+	sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_DARK_OPTS" $FZF_CONFIG
 
 	# Update Tnav colorscheme
-	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
+	sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_DARK_OPTS" $TNAV_CONFIG
 }
 
 # Function to switch to light mode
@@ -44,54 +44,33 @@ switch_to_light_mode() {
 	kitten themes Catppuccin-Latte
 
 	# Update Alacritty colorscheme
-  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|"~/.config/alacritty/themes/catppuccin-latte.toml"|' "$ALACRITTY_CONFIG"
+	sd '~/.config/alacritty/themes/catppuccin-macchiato.toml' '~/.config/alacritty/themes/catppuccin-latte.toml' $ALACRITTY_CONFIG
 
 	# Update Neovim colorscheme
-	sed -i '' 's/flavour = "latte",/flavour = "macchiato",/' $NEOVIM_CONFIG
+	sd 'flavour = "macchiato",' 'flavour = "latte",' $NEOVIM_CONFIG
 
 	# Update Tmux colorscheme
-	sed -i '' "s/set -g @catppuccin_flavour 'latte'/set -g @catppuccin_flavour 'macchiato'/" $TMUX_CONFIG
+	sd "set -g @catppuccin_flavour 'macchiato'" "set -g @catppuccin_flavour 'latte'" $TMUX_CONFIG
 	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 
 	# Update FZF colorscheme
-	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $FZF_CONFIG
+	sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_LIGHT_OPTS" $FZF_CONFIG
 
 	# Update Tnav colorscheme
-	sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_DARK_OPTS|" $TNAV_CONFIG
-}
-
-# Function to switch to light mode
-switch_to_light_mode() {
-	# Update Kitty colorscheme
-	kitten themes Catppuccin-Latte
-
-	# Update Alacritty colorscheme
-  sed -i '' 's|"~/.config/alacritty/themes/catppuccin-latte.toml"|"~/.config/alacritty/themes/catppuccin-macchiato.toml"|' "$ALACRITTY_CONFIG"
-
-  # Update Neovim colorscheme
-  sed -i '' 's/flavour = "macchiato",/flavour = "latte",/' $NEOVIM_CONFIG
-
-  # Update Tmux colorscheme
-  sed -i '' "s/set -g @catppuccin_flavour 'macchiato'/set -g @catppuccin_flavour 'latte'/" $TMUX_CONFIG
-
-  # Update FZF colorscheme
-  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_LIGHT_OPTS|" $FZF_CONFIG
-
-  # Update Tnav colorscheme
-  sed -i '' "s|^export FZF_DEFAULT_OPTS=.*|$FZF_LIGHT_OPTS|" $TNAV_CONFIG
+	sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_LIGHT_OPTS" $TNAV_CONFIG
 }
 
 # Function to toggle mode
 if [[ "$TERMINAL_THEME" == "light" ]]; then
-  switch_to_dark_mode
-  export TERMINAL_THEME="dark"
-  tmux set-environment -g TERMINAL_THEME dark
-  sed -i '' 's/export TERMINAL_THEME="light"/export TERMINAL_THEME="dark"/' $MACOS_CONFIG
-  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
+	switch_to_dark_mode
+	export TERMINAL_THEME="dark"
+	tmux set-environment -g TERMINAL_THEME dark
+	sd 'export TERMINAL_THEME="light"' 'export TERMINAL_THEME="dark"' $MACOS_CONFIG
+	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 else
-  switch_to_light_mode
-  export TERMINAL_THEME="light"
-  sed -i '' 's/export TERMINAL_THEME="dark"/export TERMINAL_THEME="light"/' $MACOS_CONFIG
-  tmux set-environment -g TERMINAL_THEME light
-  tmux source-file $TMUX_CONFIG  # Reload Tmux configuration
+	switch_to_light_mode
+	export TERMINAL_THEME="light"
+	sd 'export TERMINAL_THEME="dark"' 'export TERMINAL_THEME="light"' $MACOS_CONFIG
+	tmux set-environment -g TERMINAL_THEME light
+	tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 fi
