@@ -2,17 +2,6 @@
 
 export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
-# List of required commands
-required_commands=("yq" "fd" "fzf-tmux" "exa" "pdftotext" "textutil" "bat" "tmux" "rg" "awk" "open")
-
-# Check each required command
-for cmd in "${required_commands[@]}"; do
-	if ! command -v $cmd &>/dev/null; then
-		echo "Error: Required command '$cmd' is not installed."
-		return
-	fi
-done
-
 CONFIG_FILE="$HOME/.local/bin/tnav_dirs.yaml"
 
 DIRS=()
@@ -20,40 +9,35 @@ while IFS= read -r line; do
 	DIRS+=("$HOME/$line")
 done < <(yq e '.directories[]' $CONFIG_FILE)
 
-preview_logic() {
-	if [ -d {} ]; then
-		exa -T -L 2 --icons --group-directories-first -I 'node_modules' --git-ignore {}
-	elif [[ {} == *.pdf ]]; then
-		pdftotext -l 10 -nopgbrk -q {} -
-	elif [[ {} == *.docx ]]; then
-		textutil -stdout -cat txt {} | bat --style=numbers --color=always --line-range :500
-	else
-		bat --style=numbers --color=always --line-range :500 {}
-	fi
+fzf_tmux_call() {
+  fd . "$@" |
+    awk -v home=$HOME '{gsub(home, "~"); print}' |
+    fzf-tmux -p 40%,50% --reverse --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
+    xargs echo
 }
 
 fzf_call() {
-	fd . "$@" |
-		fzf-tmux -p 80%,80% --expect "alt-enter,enter,ctrl-t,ctrl-o" \
-			--preview "$(typeset -f preview_logic); preview_logic" |
-		xargs echo
+  fd . "$@" |
+    awk -v home=$HOME '{gsub(home, "~"); print}' |
+    fzf --reverse --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
+    xargs echo
 }
 
 # Check last argument value.
 LAST_ARG="${@:$#}"
+RUN_TMUX=false
+if [[ $LAST_ARG = "--tmux" ]]; then
+	RUN_TMUX=true
+fi
 
-if [[ $1 =~ ^(-p|--path)$ ]]; then
-	OUTPUT=$(fzf_call "$2")
-
-elif [[ -z $1 ]] || [[ $LAST_ARG =~ ^(--tmux|-o|--open)$ ]]; then
-	OUTPUT=$(fzf_call "${DIRS[@]}")
-
-elif [[ $LAST_ARG =~ ^(-r|--relative)$ ]]; then
-	OUTPUT=$(fzf_call "$(pwd)")
-
-else # Argument passed is a file or directory path
+if [[ -z $1 ]]; then
+	OUTPUT=$(fzf_tmux_call "${DIRS[@]}" | sd '~' $HOME)
+elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
+	OUTPUT=$(fzf_call "${DIRS[@]}" | sd '~' $HOME)
+elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
+  cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
+else
 	echo "Invalid argument passed"
-	return
 fi
 
 read -r KEYPRESS BASE_PATH <<<"${OUTPUT}"
@@ -71,15 +55,6 @@ PATH_IS_CONFIG=false
 SESSION_IS_RUNNING=false
 START_TMUX=false
 
-if [[ $LAST_ARG = "--tmux" ]]; then
-	RUN_TMUX=true
-
-elif [[ $1 =~ ^(-o|--open)$ ]]; then
-	SYS_OPEN=true
-
-else
-	RUN_TMUX=false
-fi
 
 start_new_session() {
 	if [[ "$START_TMUX" = true ]]; then
@@ -87,13 +62,10 @@ start_new_session() {
 	fi
 
 	if [[ "$PATH_IS_DIR" = true ]]; then
-		if [[ "$BASE_NAME" = "zsh" ]] || [[ "$BASE_NAME" = "nvim" ]] || [[ "$BASE_NAME" = "tmux" ]]; then
-			PATH_IS_CONFIG=true
-			tmux new-session -ds "config" -c $BASE_PATH
-		else
-			tmux new-session -ds $BASE_NAME -c $BASE_PATH
-		fi
+    zoxide add $BASE_PATH
+		tmux new-session -ds $BASE_NAME -c $BASE_PATH
 	elif [[ "$PATH_IS_FILE" = true ]]; then
+    zoxide add $PARENT_PATH
 		tmux new-session -ds $PARENT_NAME -c $PARENT_PATH
 	fi
 	SESSION_IS_RUNNING=true
@@ -104,11 +76,7 @@ jump_to_open_session() {
 		tmux attach
 	else
 		if [[ "$PATH_IS_DIR" = true ]]; then
-			if [[ "$PATH_IS_CONFIG" = false ]]; then
-				tmux switch-client -t $BASE_NAME
-			else
-				tmux switch-client -t "config"
-			fi
+      tmux switch-client -t $BASE_NAME
 		elif [[ "$PATH_IS_FILE" = true ]]; then
 			tmux switch-client -t $PARENT_NAME
 		fi
@@ -116,31 +84,9 @@ jump_to_open_session() {
 
 }
 
-recursive_search() {
-	if [[ $PATH_IS_DIR ]]; then
-		search_path="$BASE_PATH"
-		relative_path="$BASE_NAME"
-	elif [[ $PATH_IS_FILE ]]; then
-		search_path="$PARENT_PATH"
-		relative_path="$PARENT_NAME"
-	fi
-
-	cd $(dirname $search_path)
-
-	if [[ "$RUN_TMUX" = true ]]; then
-		source $HOME/.local/bin/tnav --path $relative_path --tmux
-	else
-		source $HOME/.local/bin/tnav --path $relative_path
-	fi
-}
-
 open_directory() {
 	if [ "$KEYPRESS" = "enter" ]; then
-		if [[ "$SYS_OPEN" = true ]]; then
-			cd $BASE_PATH
-			open .
-			return
-		elif [[ "$RUN_TMUX" = true ]]; then
+		if [[ "$RUN_TMUX" = true ]]; then
 			start_new_session
 			if [[ "$PATH_IS_CONFIG" = true ]]; then
 				tmux send-keys -t config.0 "$EDITOR" ENTER
@@ -149,6 +95,7 @@ open_directory() {
 			fi
 			jump_to_open_session
 		else
+      zoxide add $BASE_PATH
 			cd $BASE_PATH
 			$EDITOR
 		fi
@@ -157,12 +104,9 @@ open_directory() {
 			start_new_session
 			jump_to_open_session
 		else
+      zoxide add $BASE_PATH
 			cd $BASE_PATH
 		fi
-	elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
-		recursive_search
-	elif [[ "$KEYPRESS" = "ctrl-o" ]]; then
-		open $BASE_PATH
 	else
 		return
 	fi
@@ -170,29 +114,13 @@ open_directory() {
 
 open_file() {
 	if [ "$KEYPRESS" = "enter" ]; then
-		if [[ "$SYS_OPEN" = true ]]; then
-			open "$BASE_PATH"
-			return
-		elif [[ "$RUN_TMUX" = true ]]; then
-			if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
-				open "$BASE_PATH"
-				return
-			fi
+		if [[ "$RUN_TMUX" = true ]]; then
 			start_new_session
-			if [[ "$PATH_IS_CONFIG" = true ]]; then
-				tmux send-keys -t config.0 "$EDITOR $BASE_NAME" ENTER
-			else
-				tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
-			fi
+      tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
 			jump_to_open_session
-			# TODO: This doesn't work! Consider removing it
 		else
-			if [[ "binary" == $(file --mime-encoding $BASE_PATH | awk '{print $2}') ]]; then
-				open "$BASE_PATH"
-			else
-				cd $PARENT_PATH
-				$EDITOR $BASE_NAME
-			fi
+      cd $PARENT_PATH
+      $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
 		if [[ "$RUN_TMUX" = true ]]; then
@@ -201,10 +129,6 @@ open_file() {
 		else
 			cd $PARENT_PATH
 		fi
-	elif [[ "$KEYPRESS" = "ctrl-t" ]]; then
-		recursive_search
-	elif [[ "$KEYPRESS" = "ctrl-o" ]]; then
-		open $BASE_PATH
 	else
 		return
 	fi
