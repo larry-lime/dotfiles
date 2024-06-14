@@ -1,5 +1,7 @@
 #!/bin/zsh
 
+# alias cd="/usr/bin/cd"
+
 export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
 CONFIG_FILE="$HOME/.local/bin/tnav_dirs.yaml"
@@ -9,17 +11,29 @@ while IFS= read -r line; do
 	DIRS+=("$HOME/$line")
 done < <(yq e '.directories[]' $CONFIG_FILE)
 
-fzf_tmux_call() {
-  fd . "$@" |
-    awk -v home=$HOME '{gsub(home, "~"); print}' |
-    fzf-tmux -p 40%,50% --reverse --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
-    xargs echo
-}
+# Get list of zoxide directories (using sesh list)
+zoxide_dirs=$(sesh list)
+
+# Use a named pipe for fd output
+pipe=$(mktemp -u)
+mkfifo "$pipe"
 
 fzf_call() {
-  fd . "$@" |
-    awk -v home=$HOME '{gsub(home, "~"); print}' |
-    fzf --reverse --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
+  echo -e "$zoxide_dirs\n $(fd . "$@" | awk -v home=$HOME '{gsub(home, "~"); print}')" |
+    fzf-tmux -p 40%,50%\
+    --reverse\
+    --prompt '⚡ '\
+    --border-label ' tnav '\
+    --header '  ^a all ^t tmux ^g configs ^x zoxide ^d tmux kill ^f find' \
+    --bind 'tab:down,btab:up' \
+    --bind 'ctrl-a:execute(echo -n {} > /tmp/fzf_value; echo -n ⚡  )+reload(fzf_call "$@")' \
+    --bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
+    --bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
+    --bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
+    --bind 'ctrl-f:change-prompt(🔎  )+reload(fd -H -d 2 -t d -E .Trash . ~)' \
+    --bind 'ctrl-d:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
+    --bind 'ctrl-n:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
+    --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
     xargs echo
 }
 
@@ -31,7 +45,7 @@ if [[ $LAST_ARG = "--tmux" ]]; then
 fi
 
 if [[ -z $1 ]]; then
-	OUTPUT=$(fzf_tmux_call "${DIRS[@]}" | sd '~' $HOME)
+	OUTPUT=$(fzf_call "${DIRS[@]}" | sd '~' $HOME)
 elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
 	OUTPUT=$(fzf_call "${DIRS[@]}" | sd '~' $HOME)
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
@@ -51,60 +65,36 @@ PARENT_PATH=$(dirname $BASE_PATH)
 PARENT_NAME=$(basename $PARENT_PATH | tr -d '.')
 PATH_IS_DIR=false
 PATH_IS_FILE=false
-PATH_IS_CONFIG=false
+PATH_IS_SESSION=false
 SESSION_IS_RUNNING=false
 START_TMUX=false
 
 
-start_new_session() {
-	if [[ "$START_TMUX" = true ]]; then
-		tmux start-server
-	fi
-
-	if [[ "$PATH_IS_DIR" = true ]]; then
-    zoxide add $BASE_PATH
-		tmux new-session -ds $BASE_NAME -c $BASE_PATH
-	elif [[ "$PATH_IS_FILE" = true ]]; then
-    zoxide add $PARENT_PATH
-		tmux new-session -ds $PARENT_NAME -c $PARENT_PATH
-	fi
-	SESSION_IS_RUNNING=true
+open_session() {
+  if [[ "$KEYPRESS" = "enter" ]] || [[ "$KEYPRESS" = "alt-enter" ]]; then
+    sesh connect $BASE_PATH
+  else
+    return
+  fi
 }
 
-jump_to_open_session() {
-	if [[ -z "$TMUX" ]]; then
-		tmux attach
-	else
-		if [[ "$PATH_IS_DIR" = true ]]; then
-      tmux switch-client -t $BASE_NAME
-		elif [[ "$PATH_IS_FILE" = true ]]; then
-			tmux switch-client -t $PARENT_NAME
-		fi
-	fi
-
-}
 
 open_directory() {
 	if [ "$KEYPRESS" = "enter" ]; then
 		if [[ "$RUN_TMUX" = true ]]; then
-			start_new_session
-			if [[ "$PATH_IS_CONFIG" = true ]]; then
-				tmux send-keys -t config.0 "$EDITOR" ENTER
-			else
-				tmux send-keys -t $BASE_NAME.0 "$EDITOR" ENTER
-			fi
-			jump_to_open_session
+      zoxide add $BASE_PATH
+      sesh connect $BASE_PATH
+      tmux send-keys -t $BASE_NAME.0 "$EDITOR" ENTER
 		else
       zoxide add $BASE_PATH
 			cd $BASE_PATH
 			$EDITOR
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
-		if [[ "$RUN_TMUX" = true ]]; then
-			start_new_session
-			jump_to_open_session
-		else
       zoxide add $BASE_PATH
+		if [[ "$RUN_TMUX" = true ]]; then
+      sesh connect $BASE_PATH
+		else
 			cd $BASE_PATH
 		fi
 	else
@@ -115,17 +105,15 @@ open_directory() {
 open_file() {
 	if [ "$KEYPRESS" = "enter" ]; then
 		if [[ "$RUN_TMUX" = true ]]; then
-			start_new_session
+      sesh connect $PARENT_PATH
       tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
-			jump_to_open_session
 		else
       cd $PARENT_PATH
       $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
 		if [[ "$RUN_TMUX" = true ]]; then
-			start_new_session
-			jump_to_open_session
+      sesh connect $PARENT_PATH
 		else
 			cd $PARENT_PATH
 		fi
@@ -134,11 +122,14 @@ open_file() {
 	fi
 }
 
-if [ -d $BASE_PATH ]; then
-	BASE_PATH=${BASE_PATH%?} # Only needed if using fd command
-	PATH_IS_DIR=true
-	open_directory
+sessions=$(sesh list --tmux)
+if echo "$sessions" | rg -q "^$BASE_PATH$"; then
+  PATH_IS_SESSION=true
+  open_session
+elif [ -d $BASE_PATH ]; then
+  PATH_IS_DIR=true
+  open_directory
 else
-	PATH_IS_FILE=true
-	open_file
+  PATH_IS_FILE=true
+  open_file
 fi
