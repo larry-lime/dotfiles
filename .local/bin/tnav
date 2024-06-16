@@ -6,7 +6,7 @@
 
 export FZF_DEFAULT_OPTS="--color=bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39 --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39"
 
-CONFIG_FILE="$HOME/.local/bin/tnav_dirs.yaml"
+CONFIG_FILE="$HOME/.local/bin/config_dirs.yaml"
 
 DIRS=()
 while IFS= read -r line; do
@@ -27,7 +27,7 @@ session_manager() {
     --no-sort\
     --tiebreak=length\
     --border-label ' Sessions '\
-    --prompt '🪟 ' \
+    --prompt '📁 ' \
 		--header '  ^d tmux kill' \
 		--bind 'tab:down,btab:up' \
 		--bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
@@ -82,6 +82,30 @@ if [[ -z $1 ]]; then
 
 elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
 	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
+
+elif [[ $LAST_ARG =~ ^(--window)$ ]]; then
+  # Get the current window in the format "session:window"
+  current_window=$(tmux display-message -p '#S:#I:')
+
+  # List all windows and filter out the current one
+  windows=$(tmux list-windows -a | rg -v "^$current_window")
+
+  # Use fzf-tmux to select the target window with customized options
+  target_origin=$(echo "$windows" | fzf-tmux -p 40%,50% \
+      --reverse \
+      --exact \
+      --no-sort \
+      --tiebreak=length \
+      --border-label ' Windows ' \
+      --prompt '🪟 ' \
+    )
+
+  # Extract the target window id
+  target=$(echo "$target_origin" | sed 's/: .*//')
+
+  # Switch to the selected session and window
+  echo "$target" | sed 's/:.*//g' | xargs -I{} tmux switch-client -t {}
+  echo "$target" | xargs -I{} tmux select-window -t {}
 
 elif [[ $LAST_ARG =~ ^(--session)$ ]]; then
   sesh connect $(session_manager)

@@ -414,7 +414,7 @@ tab_bar_edge top
 
 #: The margin to the left and right of the tab bar (in pts)
 
-tab_bar_style powerline
+tab_bar_style hidden
 tab_powerline_style slanted
 
 #: The tab bar style, can be one of: fade, separator, powerline, or
@@ -1088,6 +1088,6 @@ map ctrl+tab goto_tab -1
 
 
 # BEGIN_KITTY_THEME
-# Catppuccin-Macchiato
+# Liquid Carbon Transparent
 include current-theme.conf
 # END_KITTY_THEME
