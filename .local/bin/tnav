@@ -1,8 +1,10 @@
 #!/bin/zsh
 
-# alias cd="/usr/bin/cd"
+# TODO: Bring back the feature where the session is named as the file name
+# TODO: If a session already exists, join it
+# TODO: Fix tnav -g feature
 
-export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
+export FZF_DEFAULT_OPTS="--color=bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39 --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39"
 
 CONFIG_FILE="$HOME/.local/bin/tnav_dirs.yaml"
 
@@ -11,32 +13,62 @@ while IFS= read -r line; do
 	DIRS+=("$HOME/$line")
 done < <(yq e '.directories[]' $CONFIG_FILE)
 
-# Get list of zoxide directories (using sesh list)
-zoxide_dirs=$(sesh list)
-
 # Use a named pipe for fd output
 pipe=$(mktemp -u)
 mkfifo "$pipe"
 
-fzf_call() {
+# Manipulate the session list
+# Cmd+s
+session_manager() {
+  sesh list --tmux |
+    fzf-tmux -p 40%,50%\
+    --reverse\
+    --exact\
+    --no-sort\
+    --tiebreak=length\
+    --border-label ' Sessions '\
+    --prompt '🪟 ' \
+		--header '  ^d tmux kill' \
+		--bind 'tab:down,btab:up' \
+		--bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
+		--bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
+		--bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
+		--bind 'ctrl-d:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
+}
+
+sesh_nav() {
+  sesh list|
+    fzf-tmux -p 40%,50%\
+    --reverse\
+    --no-sort\
+    --tiebreak=length\
+    --border-label ' Sesh '\
+    --prompt '⚡ ' \
+		--header '  ^a all ^t tmux ^g configs ^x zoxide ^f find' \
+		--bind 'tab:down,btab:up' \
+		--bind 'ctrl-a:change-prompt(⚡  )+reload(sesh list)' \
+		--bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
+		--bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
+		--bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
+		--bind 'ctrl-f:change-prompt(🔎  )+reload(fd -H -d 2 -t d -E .Trash . ~)'
+}
+# Navigate through directories and files in the cmd line
+# Ctrl+t
+nav() {
+  local zoxide_dirs=$(sesh list --zoxide)
   echo -e "$zoxide_dirs\n $(fd . "$@" | awk -v home=$HOME '{gsub(home, "~"); print}')" |
     fzf-tmux -p 40%,50%\
     --reverse\
-    --prompt '⚡ '\
-    --border-label ' tnav '\
-    --header '  ^a all ^t tmux ^g configs ^x zoxide ^d tmux kill ^f find' \
-    --bind 'tab:down,btab:up' \
-    --bind 'ctrl-a:execute(echo -n {} > /tmp/fzf_value; echo -n ⚡  )+reload(fzf_call "$@")' \
-    --bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
-    --bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
-    --bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
-    --bind 'ctrl-f:change-prompt(🔎  )+reload(fd -H -d 2 -t d -E .Trash . ~)' \
-    --bind 'ctrl-d:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
-    --bind 'ctrl-n:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
-    --expect "alt-enter,enter,ctrl-t,ctrl-o"| 
+    --exact\
+    --no-sort\
+    --border-label ' Tnav '\
+    --prompt '🔎 ' \
+    --expect "alt-enter,enter"| 
     xargs echo
 }
 
+# Navigate through directories and files spawning tmux sessions
+# Cmd+k
 # Check last argument value.
 LAST_ARG="${@:$#}"
 RUN_TMUX=false
@@ -44,12 +76,22 @@ if [[ $LAST_ARG = "--tmux" ]]; then
 	RUN_TMUX=true
 fi
 
+# TODO: Change this so that they act differently
 if [[ -z $1 ]]; then
-	OUTPUT=$(fzf_call "${DIRS[@]}" | sd '~' $HOME)
+	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
+
 elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
-	OUTPUT=$(fzf_call "${DIRS[@]}" | sd '~' $HOME)
+	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
+
+elif [[ $LAST_ARG =~ ^(--session)$ ]]; then
+  sesh connect $(session_manager)
+
+elif [[ $LAST_ARG =~ ^(--sesh)$ ]]; then
+  sesh connect $(sesh_nav)
+
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
   cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
+
 else
 	echo "Invalid argument passed"
 fi
@@ -81,17 +123,14 @@ open_session() {
 
 open_directory() {
 	if [ "$KEYPRESS" = "enter" ]; then
+    zoxide add $BASE_PATH
 		if [[ "$RUN_TMUX" = true ]]; then
-      zoxide add $BASE_PATH
-      sesh connect $BASE_PATH
-      tmux send-keys -t $BASE_NAME.0 "$EDITOR" ENTER
+      sesh connect -c $EDITOR $BASE_PATH
 		else
-      zoxide add $BASE_PATH
-			cd $BASE_PATH
-			$EDITOR
+			cd $BASE_PATH && $EDITOR
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
-      zoxide add $BASE_PATH
+    zoxide add $BASE_PATH
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect $BASE_PATH
 		else
@@ -105,11 +144,9 @@ open_directory() {
 open_file() {
 	if [ "$KEYPRESS" = "enter" ]; then
 		if [[ "$RUN_TMUX" = true ]]; then
-      sesh connect $PARENT_PATH
-      tmux send-keys -t $PARENT_NAME.0 "$EDITOR $BASE_NAME" ENTER
+      sesh connect -c "$EDITOR $BASE_NAME" $PARENT_PATH
 		else
-      cd $PARENT_PATH
-      $EDITOR $BASE_NAME
+      cd $PARENT_PATH && $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
 		if [[ "$RUN_TMUX" = true ]]; then
