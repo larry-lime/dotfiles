@@ -1,0 +1,19 @@
+#!/bin/bash
+
+new_session=$(tmux show-environment -g LAST_SESSION | sd 'LAST_SESSION=' '')
+new_window=$(tmux show-environment -g LAST_WINDOW | sd 'LAST_WINDOW=' '')
+
+if [ -z "$new_session" ] || [ -z "$new_window" ]; then
+	tmux display-message "Cannot locate last sessoin/window"
+	exit
+fi
+
+read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
+
+tmux set-environment -g LAST_SESSION "$last_session"
+tmux set-environment -g LAST_WINDOW "$last_window"
+
+if [ "$new_session" != "$last_session" ]; then
+	tmux switch-client -t "$new_session"
+fi
+tmux select-window -t "$new_window"

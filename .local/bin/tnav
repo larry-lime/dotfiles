@@ -80,7 +80,6 @@ nav() {
 # Check last argument value.
 LAST_ARG="${@:$#}"
 
-# TODO: Change this so that they act differently
 if [[ -z $1 ]]; then
   read -r KEYPRESS BASE_PATH <<<"$(nav "${DIRS[@]}" | sd '~' $HOME)"
 
@@ -94,7 +93,6 @@ elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
 
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
   cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
-
 else
 	echo "Invalid argument passed"
 fi
@@ -102,6 +100,11 @@ fi
 if [ -z $BASE_PATH ]; then
 	return
 fi
+
+# TODO: Here, set my current session and window as the last session
+read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
+tmux set-environment -g LAST_SESSION "$last_session"
+tmux set-environment -g LAST_WINDOW "$last_window"
 
 BASE_NAME=$(basename $BASE_PATH)
 PARENT_PATH=$(dirname $BASE_PATH)
