@@ -37,7 +37,10 @@ session_manager() {
 }
 
 sesh_nav() {
-  sesh list|
+  local windows=$(tmux list-windows -a -F "#S:#W")
+  local sessions=$(sesh list --tmux --config)
+  local zoxide_dirs=$(sesh list --zoxide)
+  echo -e "$sessions\n$windows\n$zoxide_dirs\n$(fd . "$@" | sd "$HOME" "~")" |
     fzf-tmux -p 40%,50%\
     --reverse\
     --no-sort\
