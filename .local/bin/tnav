@@ -84,28 +84,26 @@ elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
 	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
 
 elif [[ $LAST_ARG =~ ^(--window)$ ]]; then
-  # Get the current window in the format "session:window"
-  current_window=$(tmux display-message -p '#S:#I:')
+  # NOTE: I should ID which window to go to by ID
+  # because names can be duplicated
 
-  # List all windows and filter out the current one
-  windows=$(tmux list-windows -a | rg -v "^$current_window")
+  # read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
 
-  # Use fzf-tmux to select the target window with customized options
-  target_origin=$(echo "$windows" | fzf-tmux -p 40%,50% \
-      --reverse \
-      --exact \
-      --no-sort \
-      --tiebreak=length \
-      --border-label ' Windows ' \
-      --prompt '🪟 ' \
-    )
+  read -r session window <<< $(
+    tmux list-windows -a -F "#S:#W"|
+      fzf-tmux -p 40%,50% \
+        --reverse \
+        --exact \
+        --no-sort \
+        --tiebreak=length \
+        --border-label ' Windows ' \
+        --prompt '🪟 ' |
+        sd ':' ' '
+      )
 
-  # Extract the target window id
-  target=$(echo "$target_origin" | sed 's/: .*//')
-
-  # Switch to the selected session and window
-  echo "$target" | sed 's/:.*//g' | xargs -I{} tmux switch-client -t {}
-  echo "$target" | xargs -I{} tmux select-window -t {}
+  # tmux switch-client -t asession
+  sesh connect $session
+  tmux select-window -t $window
 
 elif [[ $LAST_ARG =~ ^(--session)$ ]]; then
   sesh connect $(session_manager)
