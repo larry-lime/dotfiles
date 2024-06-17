@@ -83,33 +83,16 @@ if [[ -z $1 ]]; then
 elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
 	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
 
-elif [[ $LAST_ARG =~ ^(--window)$ ]]; then
-  # NOTE: I should ID which window to go to by ID
-  # because names can be duplicated
-
-  # read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
-
-  read -r session window <<< $(
-    tmux list-windows -a -F "#S:#W"|
-      fzf-tmux -p 40%,50% \
-        --reverse \
-        --exact \
-        --no-sort \
-        --tiebreak=length \
-        --border-label ' Windows ' \
-        --prompt '🪟 ' |
-        sd ':' ' '
-      )
-
-  # tmux switch-client -t asession
-  sesh connect $session
-  tmux select-window -t $window
-
-elif [[ $LAST_ARG =~ ^(--session)$ ]]; then
-  sesh connect $(session_manager)
-
+# NOTE: When I connect using this, I never open things in an editor
 elif [[ $LAST_ARG =~ ^(--sesh)$ ]]; then
-  sesh connect $(sesh_nav)
+  OUTPUT=$(sesh_nav)
+  if [[ "$OUTPUT" == *":"* ]]; then
+    IFS=':' read -r session window <<< "$OUTPUT"
+    sesh connect $session
+    tmux select-window -t $window
+  else
+    sesh connect $OUTPUT
+  fi
 
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
   cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
