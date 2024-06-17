@@ -2,9 +2,16 @@
 
 # TODO: Bring back the feature where the session is named as the file name
 # TODO: If a session already exists, join it
-# TODO: Fix tnav -g feature
+# BUG: There's an issue with tmux -g when you run it in a display window
 
-export FZF_DEFAULT_OPTS="--color=bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39 --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39"
+# TODO: Command+t should pull up tnav with windows, zoxide, and fzf. Everything should open in a new window
+# This should just act like a new tab
+# TODO: Command+k should pull up tnav with windows, sessions, zoxide, and fzf. Everything should open or join a new session
+# This should just act like a switcher
+
+# NOTE: Something good would be for me to, once zoxide has my filepath dirs saved, add them to the list instead of manually passing the dirs
+
+export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
 CONFIG_FILE="$HOME/.local/bin/config_dirs.yaml"
 
@@ -13,89 +20,77 @@ while IFS= read -r line; do
 	DIRS+=("$HOME/$line")
 done < <(yq e '.directories[]' $CONFIG_FILE)
 
-# Use a named pipe for fd output
-pipe=$(mktemp -u)
-mkfifo "$pipe"
+nav_tmux() {
+  local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
+  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
+  local sessions=$(sesh list --tmux | sed 's/^/[s] /')
 
-# Manipulate the session list
-# Cmd+s
-session_manager() {
-  sesh list --tmux |
+  {
+    echo -e "$sessions\n$windows\n$zoxide_dirs"
+    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
+  } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
-    --reverse\
-    --exact\
-    --no-sort\
-    --tiebreak=length\
-    --border-label ' Sessions '\
-    --prompt '📁 ' \
-		--header '  ^d tmux kill' \
-		--bind 'tab:down,btab:up' \
-		--bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
-		--bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
-		--bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
-		--bind 'ctrl-d:execute(tmux kill-session -t {})+change-prompt(⚡  )+reload(sesh list)'\
-}
-
-sesh_nav() {
-  local windows=$(tmux list-windows -a -F "#S:#W")
-  local sessions=$(sesh list --tmux --config)
-  local zoxide_dirs=$(sesh list --zoxide)
-  echo -e "$sessions\n$windows\n$zoxide_dirs\n$(fd . "$@" | sd "$HOME" "~")" |
-    fzf-tmux -p 40%,50%\
-    --reverse\
-    --no-sort\
-    --tiebreak=length\
-    --border-label ' Sesh '\
-    --prompt '⚡ ' \
-		--header '  ^a all ^t tmux ^g configs ^x zoxide ^f find' \
-		--bind 'tab:down,btab:up' \
-		--bind 'ctrl-a:change-prompt(⚡  )+reload(sesh list)' \
-		--bind 'ctrl-t:change-prompt(🪟  )+reload(sesh list -t)' \
-		--bind 'ctrl-g:change-prompt(⚙️  )+reload(sesh list -c)' \
-		--bind 'ctrl-x:change-prompt(📁  )+reload(sesh list -z)' \
-		--bind 'ctrl-f:change-prompt(🔎  )+reload(fd -H -d 2 -t d -E .Trash . ~)'
-}
-# Navigate through directories and files in the cmd line
-# Ctrl+t
-nav() {
-  local zoxide_dirs=$(sesh list --zoxide)
-  echo -e "$zoxide_dirs\n $(fd . "$@" | awk -v home=$HOME '{gsub(home, "~"); print}')" |
-    fzf-tmux -p 40%,50%\
-    --reverse\
-    --exact\
-    --no-sort\
-    --border-label ' Tnav '\
-    --prompt '🔎 ' \
-    --expect "alt-enter,enter"| 
+      --reverse\
+      --exact\
+      --no-sort\
+      --border-label ' Tnav '\
+      --prompt '🔎 ' \
+      --expect "alt-enter,enter" | 
+    sed 's/.*] //' |
     xargs echo
 }
 
-# Navigate through directories and files spawning tmux sessions
-# Cmd+k
+nav_window() {
+  local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
+  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
+
+  {
+    echo -e "$windows\n$zoxide_dirs"
+    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
+  } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
+    fzf-tmux -p 40%,50%\
+      --reverse\
+      --exact\
+      --no-sort\
+      --border-label ' Tnav '\
+      --prompt '🔎 ' \
+      --expect "alt-enter,enter" | 
+    sed 's/.*] //' |
+    xargs echo
+}
+
+nav() {
+  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
+
+  {
+    echo -e "$zoxide_dirs"
+    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
+  } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
+    fzf-tmux -p 40%,50%\
+      --reverse\
+      --exact\
+      --no-sort\
+      --border-label ' Tnav '\
+      --prompt '🔎 ' \
+      --expect "alt-enter,enter" | 
+    sed 's/.*] //' |
+    xargs echo
+}
+
 # Check last argument value.
 LAST_ARG="${@:$#}"
-RUN_TMUX=false
-if [[ $LAST_ARG = "--tmux" ]]; then
-	RUN_TMUX=true
-fi
 
 # TODO: Change this so that they act differently
 if [[ -z $1 ]]; then
-	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
+  read -r KEYPRESS BASE_PATH <<<"$(nav "${DIRS[@]}" | sd '~' $HOME)"
+
+elif [[ $LAST_ARG =~ ^(--window|w)$ ]]; then
+	RUN_WINDOWS=true
+  read -r KEYPRESS BASE_PATH <<<"$(nav_window "${DIRS[@]}" | sd '~' $HOME)"
 
 elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
-	OUTPUT=$(nav "${DIRS[@]}" | sd '~' $HOME)
-
-# NOTE: When I connect using this, I never open things in an editor
-elif [[ $LAST_ARG =~ ^(--sesh)$ ]]; then
-  OUTPUT=$(sesh_nav)
-  if [[ "$OUTPUT" == *":"* ]]; then
-    IFS=':' read -r session window <<< "$OUTPUT"
-    sesh connect $session
-    tmux select-window -t $window
-  else
-    sesh connect $OUTPUT
-  fi
+	RUN_TMUX=true
+  read -r KEYPRESS BASE_PATH <<<"$(nav_tmux "${DIRS[@]}" | sd '~' $HOME)"
 
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
   cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
@@ -104,8 +99,6 @@ else
 	echo "Invalid argument passed"
 fi
 
-read -r KEYPRESS BASE_PATH <<<"${OUTPUT}"
-
 if [ -z $BASE_PATH ]; then
 	return
 fi
@@ -113,34 +106,25 @@ fi
 BASE_NAME=$(basename $BASE_PATH)
 PARENT_PATH=$(dirname $BASE_PATH)
 PARENT_NAME=$(basename $PARENT_PATH | tr -d '.')
-PATH_IS_DIR=false
-PATH_IS_FILE=false
-PATH_IS_SESSION=false
-SESSION_IS_RUNNING=false
-START_TMUX=false
-
-
-open_session() {
-  if [[ "$KEYPRESS" = "enter" ]] || [[ "$KEYPRESS" = "alt-enter" ]]; then
-    sesh connect $BASE_PATH
-  else
-    return
-  fi
-}
-
 
 open_directory() {
 	if [ "$KEYPRESS" = "enter" ]; then
     zoxide add $BASE_PATH
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect -c $EDITOR $BASE_PATH
-		else
+    elif [[ "$RUN_WINDOWS" = true ]]; then
+      WINDOW_ID=$(tmux new-window -n "$BASE_NAME" -c "$BASE_PATH" -P -F "#{window_id}")
+      tmux send-keys -t "$WINDOW_ID" 'nvim' C-m
+      tmux select-window -t "$WINDOW_ID"
+    else
 			cd $BASE_PATH && $EDITOR
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
     zoxide add $BASE_PATH
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect $BASE_PATH
+    elif [[ "$RUN_WINDOWS" = true ]]; then
+      tmux new-window -n $BASE_NAME -c $BASE_PATH
 		else
 			cd $BASE_PATH
 		fi
@@ -153,12 +137,18 @@ open_file() {
 	if [ "$KEYPRESS" = "enter" ]; then
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect -c "$EDITOR $BASE_NAME" $PARENT_PATH
+    elif [[ "$RUN_WINDOWS" = true ]]; then
+      WINDOW_ID=$(tmux new-window -n "$BASE_NAME" -c "$PARENT_PATH" -P -F "#{window_id}")
+      tmux send-keys -t "$WINDOW_ID" 'nvim' C-m
+      tmux select-window -t "$WINDOW_ID"
 		else
       cd $PARENT_PATH && $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect $PARENT_PATH
+    elif [[ "$RUN_WINDOWS" = true ]]; then
+      tmux new-window -n $BASE_NAME -c $PARENT_PATH
 		else
 			cd $PARENT_PATH
 		fi
@@ -167,14 +157,15 @@ open_file() {
 	fi
 }
 
-sessions=$(sesh list --tmux)
-if echo "$sessions" | rg -q "^$BASE_PATH$"; then
-  PATH_IS_SESSION=true
-  open_session
+if echo "$(sesh list --tmux)" | rg -q "^$BASE_PATH$"; then
+  sesh connect $BASE_PATH
+elif [[ "$BASE_PATH" == *":"* ]]; then
+  IFS=':' read -r session window <<< "$BASE_PATH"
+  sesh connect $session
+  tmux select-window -t $window
+  return
 elif [ -d $BASE_PATH ]; then
-  PATH_IS_DIR=true
   open_directory
 else
-  PATH_IS_FILE=true
   open_file
 fi
