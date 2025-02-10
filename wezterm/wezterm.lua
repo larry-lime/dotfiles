@@ -1,14 +1,49 @@
 local wezterm = require("wezterm")
+
+local presets = {
+	catppuccin = {
+		light = {
+			color_scheme = "Catppuccin Latte",
+			font = wezterm.font("MonoLisa Nerd Font"),
+		},
+		dark = {
+			color_scheme = "Catppuccin Macchiato",
+			font = wezterm.font("MonoLisa Nerd Font"),
+		},
+	},
+	rose_pine = {
+		light = {
+			color_scheme = "rose-pine-dawn",
+			font = wezterm.font("ComicCodeLigatures Nerd Font"),
+		},
+		dark = {
+			color_scheme = "rose-pine-moon",
+			font = wezterm.font("ComicCodeLigatures Nerd Font"),
+		},
+	},
+}
+
+local is_dark_mode = true
+
+-- Define color theme toggle
+local color_theme = "catppuccin"
+
+-- Choose preset and mode
+local chosen_preset = presets[color_theme][is_dark_mode and "dark" or "light"]
+
 return {
-	color_scheme = "Catppuccin Latte",
-	-- color_scheme = "rose-pine-moon",
+	color_scheme = chosen_preset.color_scheme,
 	enable_tab_bar = false,
 	font_size = 16.0,
+	line_height = 1.0,
+	cell_width = 1.0,
 	font = wezterm.font("ComicCodeLigatures Nerd Font"),
 	-- font = wezterm.font("MonoLisa Nerd Font"),
-	macos_window_background_blur = 90,
+	-- font = wezterm.font("BlexMono Nerd Font"),
+	-- font = wezterm.font("JetBrainsMono Nerd Font"),
 	window_decorations = "RESIZE",
 	keys = {
+		-- NOTE: Alt + Key
 		{ key = "a", mods = "ALT", action = wezterm.action({ SendString = "\x1ba" }) },
 		{ key = "b", mods = "ALT", action = wezterm.action({ SendString = "\x1bb" }) },
 		{ key = "c", mods = "ALT", action = wezterm.action({ SendString = "\x1bc" }) },
@@ -62,6 +97,8 @@ return {
 		-- { key = "Down", mods = "ALT", action = wezterm.action({ SendString = "\x1b[B" }) },
 		-- { key = "Left", mods = "ALT", action = wezterm.action({ SendString = "\x1b[D" }) },
 		-- { key = "Right", mods = "ALT", action = wezterm.action({ SendString = "\x1b[C" }) },
+
+		-- NOTE: Command+Shift+Key
 		{ key = "a", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🚀" }) },
 		{ key = "b", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🌟" }) },
 		{ key = "c", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🎉" }) },
@@ -78,13 +115,28 @@ return {
 		{ key = "n", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🏆" }) },
 		{ key = "o", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🏅" }) },
 		{ key = "p", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🥇" }) },
-		{ key = "q", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🥈" }) },
+		{ key = "w", mods = "CMD|SHIFT", action = wezterm.action.QuitApplication },
 		{ key = "r", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🥉" }) },
 		{ key = "s", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🚴" }) },
 		{ key = "t", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🚵" }) },
 		{ key = "u", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🏋️" }) },
+		{ key = "-", mods = "CMD|SHIFT", action = wezterm.action.DecreaseFontSize },
+		{ key = "+", mods = "CMD|SHIFT", action = wezterm.action.IncreaseFontSize },
+		{ key = "\\", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "➕" }) },
+		{ key = "1", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍎" }) },
+		{ key = "2", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍊" }) },
+		{ key = "3", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍋" }) },
+		{ key = "4", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍌" }) },
+		{ key = "5", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍉" }) },
+		{ key = "6", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍇" }) },
+		{ key = "7", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍓" }) },
+		{ key = "8", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍈" }) },
+		{ key = "9", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍒" }) },
+		{ key = "0", mods = "CMD|SHIFT", action = wezterm.action({ SendString = "🍑" }) },
 
-		-- Command+Letter
+		-- { key = "Right", mods = "CMD", action = wezterm.action({ SendString = "➡️" }) },
+
+		-- NOTE: Command+Key
 		{ key = "Tab", mods = "CTRL", action = wezterm.action({ SendString = "🍑" }) },
 		{ key = "a", mods = "CMD", action = wezterm.action({ SendString = "😀" }) },
 		{ key = "b", mods = "CMD", action = wezterm.action({ SendString = "😁" }) },
@@ -102,7 +154,7 @@ return {
 		{ key = "n", mods = "CMD", action = wezterm.action({ SendString = "😘" }) },
 		{ key = "o", mods = "CMD", action = wezterm.action({ SendString = "😗" }) },
 		{ key = "p", mods = "CMD", action = wezterm.action({ SendString = "😙" }) },
-		-- { key = "q", mods = "CMD", action = wezterm.action({ SendString = "😚" }) },
+		{ key = "q", mods = "CMD", action = wezterm.action({ SendString = "😚" }) },
 		{ key = "r", mods = "CMD", action = wezterm.action({ SendString = "🙂" }) },
 		{ key = "s", mods = "CMD", action = wezterm.action({ SendString = "🤗" }) },
 		{ key = "t", mods = "CMD", action = wezterm.action({ SendString = "🤩" }) },
@@ -128,10 +180,10 @@ return {
 		-- Non-letter, non-number keys with non-face emojis
 		{ key = "Space", mods = "CMD", action = wezterm.action({ SendString = "🔔" }) },
 		{ key = "Tab", mods = "CMD", action = wezterm.action({ SendString = "🔑" }) },
-		{ key = "Enter", mods = "CMD", action = wezterm.action({ SendString = "📥" }) },
-		{ key = "Backspace", mods = "CMD", action = wezterm.action({ SendString = "🗑️" }) },
-		-- { key = "-", mods = "CMD", action = wezterm.action({ SendString = "➖" }) },
-		{ key = "|", mods = "CMD", action = wezterm.action({ SendString = "➕" }) },
+		{ key = "Enter", mods = "CMD", action = wezterm.action({ SendString = "🗑️" }) },
+		-- { key = "Backspace", mods = "CMD", action = wezterm.action({ SendString = "🗑️" }) },
+		{ key = "-", mods = "CMD", action = wezterm.action({ SendString = "➖" }) },
+		-- { key = "|", mods = "CMD", action = wezterm.action({ SendString = "➕" }) },
 		{ key = "[", mods = "CMD", action = wezterm.action({ SendString = "📚" }) },
 		{ key = "]", mods = "CMD", action = wezterm.action({ SendString = "📖" }) },
 		{ key = "\\", mods = "CMD", action = wezterm.action({ SendString = "🔙" }) },
@@ -140,18 +192,18 @@ return {
 		{ key = ",", mods = "CMD", action = wezterm.action({ SendString = "🗒️" }) },
 		{ key = ".", mods = "CMD", action = wezterm.action({ SendString = "📌" }) },
 		{ key = "/", mods = "CMD", action = wezterm.action({ SendString = "🗂️" }) },
-		{ key = "`", mods = "CMD", action = wezterm.action({ SendString = "💡" }) },
-		-- { key = "Up", mods = "CMD", action = wezterm.action({ SendString = "⬆️" }) },
-		-- { key = "Down", mods = "CMD", action = wezterm.action({ SendString = "⬇️" }) },
-		-- { key = "Left", mods = "CMD", action = wezterm.action({ SendString = "⬅️" }) },
-		-- { key = "Right", mods = "CMD", action = wezterm.action({ SendString = "➡️" }) },
+		-- { key = "`", mods = "CMD", action = wezterm.action({ SendString = "💡" }) },
+		{ key = "UpArrow", mods = "CMD", action = wezterm.action({ SendString = "⬆️" }) },
+		{ key = "DownArrow", mods = "CMD", action = wezterm.action({ SendString = "⬇️" }) },
+		{ key = "LeftArrow", mods = "CMD", action = wezterm.action({ SendString = "📥" }) },
+		{ key = "RightArrow", mods = "CMD", action = wezterm.action({ SendString = "💡" }) },
 	},
 	mouse_bindings = {
 		-- Ctrl-click will open the link under the mouse cursor
-		-- {
-		-- 	event = { Up = { streak = 1, button = "Left" } },
-		-- 	mods = "CTRL",
-		-- 	action = wezterm.action.OpenLinkAtMouseCursor,
-		-- },
+		{
+			event = { Up = { streak = 1, button = "Left" } },
+			mods = "CTRL",
+			action = wezterm.action.OpenLinkAtMouseCursor,
+		},
 	},
 }

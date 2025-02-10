@@ -1,59 +1,44 @@
 #!/bin/zsh
 
+# FIX: Fix some of the issues
 source ~/.config/zsh/macos_config.zsh
 
 # Define paths to your configuration files
-NEOVIM_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
+NEOVIM_CONFIG="$HOME/.config/nvim/lua/config/options.lua"
+NEOVIM_COLORSCHEME_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
 TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
-FZF_CONFIG="$HOME/.config/zsh/colors.zsh"
 TNAV_CONFIG="$HOME/.local/bin/tnav"
 MACOS_CONFIG="$HOME/.dotfiles/zsh/macos_config.zsh"
 TERMINAL_CONFIG="$HOME/.config/wezterm/wezterm.lua"
 
-# Dark mode FZF and Tnav options
-FZF_DARK_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796\""
-
-# Light mode FZF and Tnav options
-FZF_LIGHT_OPTS="export FZF_DEFAULT_OPTS=\"--color=bg+:#ccd0da,bg:#eff1f5,spinner:#dc8a78,hl:#d20f39 --color=fg:#4c4f69,header:#d20f39,info:#8839ef,pointer:#dc8a78 --color=marker:#dc8a78,fg+:#4c4f69,prompt:#8839ef,hl+:#d20f39\""
-
-# Function to switch to dark mode
+# NOTE: Function to switch to dark mode
 if [[ "$TERMINAL_THEME" == "light" ]]; then
   # Update Wezterm colorscheme
-  sd 'color_scheme = "Catppuccin Latte",' 'color_scheme = "Catppuccin Macchiato",' $TERMINAL_CONFIG
+  sd 'is_dark_mode = false' 'is_dark_mode = true' $TERMINAL_CONFIG
 
   # Update Neovim colorscheme
-  sd 'flavour = "latte",' 'flavour = "macchiato",' $NEOVIM_CONFIG
+  sd 'background = "light",' 'background = "dark",' $NEOVIM_CONFIG
 
-  # Update Tmux colorscheme
-  sd "set -g @catppuccin_flavour 'latte'" "set -g @catppuccin_flavour 'macchiato'" $TMUX_CONFIG
+  # Update Tokyonight colorscheme
+  sd 'style = "day",' 'style = "moon",' $NEOVIM_COLORSCHEME_CONFIG
 
-  # Update FZF colorscheme
-  sd '^export FZF_DEFAULT_OPTS=.*' $FZF_DARK_OPTS $FZF_CONFIG
-
-  # Update Tnav colorscheme
-  sd '^export FZF_DEFAULT_OPTS=.*' $FZF_DARK_OPTS $TNAV_CONFIG
-  export TERMINAL_THEME="dark"
-  # tmux set-environment -g TERMINAL_THEME dark
+  # Update my zsh config
   sd 'export TERMINAL_THEME="light"' 'export TERMINAL_THEME="dark"' $MACOS_CONFIG
-  tmux source-file $TMUX_CONFIG # Reload Tmux configuration
+
+  export TERMINAL_THEME="dark"
 else
   # Update Wezterm colorscheme
-  sd 'color_scheme = "Catppuccin Macchiato",' 'color_scheme = "Catppuccin Latte",' $TERMINAL_CONFIG
+  sd 'is_dark_mode = true' 'is_dark_mode = false' $TERMINAL_CONFIG
 
   # Update Neovim colorscheme
-  sd 'flavour = "macchiato",' 'flavour = "latte",' $NEOVIM_CONFIG
+  sd 'background = "dark",' 'background = "light",' $NEOVIM_CONFIG
 
-  # Update Tmux colorscheme
-  sd "set -g @catppuccin_flavour 'macchiato'" "set -g @catppuccin_flavour 'latte'" $TMUX_CONFIG
+  # Update Tokyonight colorscheme
+  sd 'style = "moon",' 'style = "day",' $NEOVIM_COLORSCHEME_CONFIG
 
-  # Update FZF colorscheme
-  sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_LIGHT_OPTS" $FZF_CONFIG
-
-  # Update Tnav colorscheme
-  sd '^export FZF_DEFAULT_OPTS=.*' "$FZF_LIGHT_OPTS" $TNAV_CONFIG
+  # Update my zsh config
+  sd 'export TERMINAL_THEME="dark"' 'export TERMINAL_THEME="light"' $MACOS_CONFIG
 
   export TERMINAL_THEME="light"
-  sd 'export TERMINAL_THEME="dark"' 'export TERMINAL_THEME="light"' $MACOS_CONFIG
-  # tmux set-environment -g TERMINAL_THEME light
-  tmux source-file $TMUX_CONFIG # Reload Tmux configuration
 fi
+tmux source-file $TMUX_CONFIG # Reload Tmux configuration

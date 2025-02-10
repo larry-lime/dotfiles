@@ -1,17 +1,8 @@
 #!/bin/zsh
 
-# TODO: Bring back the feature where the session is named as the file name
-# TODO: If a session already exists, join it
-# BUG: There's an issue with tmux -g when you run it in a display window
-
-# TODO: Command+t should pull up tnav with windows, zoxide, and fzf. Everything should open in a new window
-# This should just act like a new tab
-# TODO: Command+k should pull up tnav with windows, sessions, zoxide, and fzf. Everything should open or join a new session
-# This should just act like a switcher
-
 # NOTE: Something good would be for me to, once zoxide has my filepath dirs saved, add them to the list instead of manually passing the dirs
 
-export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
+# export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
 CONFIG_FILE="$HOME/.local/bin/config_dirs.yaml"
 
@@ -23,7 +14,7 @@ done < <(yq e '.directories[]' $CONFIG_FILE)
 nav_tmux() {
   local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
   local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
-  local sessions=$(sesh list --tmux | sed 's/^/[s] /')
+  local sessions=$(sesh list --tmux --config |  sed 's/^/[s] /')
 
   {
     echo -e "$sessions\n$windows\n$zoxide_dirs"
@@ -31,7 +22,6 @@ nav_tmux() {
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
       --reverse\
-      --exact\
       --no-sort\
       --border-label ' Tnav '\
       --prompt '🔎 ' \
@@ -44,13 +34,12 @@ nav_window() {
   local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
   local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
 
+  # NOTE: Removed searching through saved paths
   {
     echo -e "$windows\n$zoxide_dirs"
-    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
       --reverse\
-      --exact\
       --no-sort\
       --border-label ' Tnav '\
       --prompt '🔎 ' \
@@ -142,7 +131,7 @@ open_file() {
       sesh connect -c "$EDITOR $BASE_NAME" $PARENT_PATH
     elif [[ "$RUN_WINDOWS" = true ]]; then
       WINDOW_ID=$(tmux new-window -n "$BASE_NAME" -c "$PARENT_PATH" -P -F "#{window_id}")
-      tmux send-keys -t "$WINDOW_ID" 'nvim' C-m
+      tmux send-keys -t "$WINDOW_ID" "nvim $BASE_NAME" C-m
       tmux select-window -t "$WINDOW_ID"
 		else
       cd $PARENT_PATH && $EDITOR $BASE_NAME
@@ -160,7 +149,7 @@ open_file() {
 	fi
 }
 
-if echo "$(sesh list --tmux)" | rg -q "^$BASE_PATH$"; then
+if echo "$(sesh list --tmux --config)" | rg -q "^$BASE_PATH$"; then
   sesh connect $BASE_PATH
 elif [[ "$BASE_PATH" == *":"* ]]; then
   IFS=':' read -r session window <<< "$BASE_PATH"
