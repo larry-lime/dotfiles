@@ -152,11 +152,11 @@ return {
 		{ key = "e", mods = "CMD", action = wezterm.action({ SendString = "😃" }) },
 		{ key = "f", mods = "CMD", action = wezterm.action({ SendString = "😄" }) },
 		{ key = "g", mods = "CMD", action = wezterm.action({ SendString = "😅" }) },
-		{ key = "h", mods = "CMD", action = wezterm.action({ SendString = "😆" }) },
+		{ key = "h", mods = "CMD", action = wezterm.action.ActivateTabRelative(-1) },
 		{ key = "i", mods = "CMD", action = wezterm.action({ SendString = "😉" }) },
 		{ key = "j", mods = "CMD", action = wezterm.action({ SendString = "😊" }) },
 		{ key = "k", mods = "CMD", action = wezterm.action({ SendString = "😋" }) },
-		{ key = "l", mods = "CMD", action = wezterm.action({ SendString = "😎" }) },
+		{ key = "l", mods = "CMD", action = wezterm.action.ActivateTabRelative(1) },
 		{ key = "m", mods = "CMD", action = wezterm.action({ SendString = "😍" }) },
 		{ key = "n", mods = "CMD", action = wezterm.action({ SendString = "😘" }) },
 		{ key = "o", mods = "CMD", action = wezterm.action({ SendString = "😗" }) },
@@ -170,7 +170,7 @@ return {
 		-- { key = "w", mods = "CMD", action = wezterm.action({ SendString = "😐" }) },
 		{ key = "x", mods = "CMD", action = wezterm.action({ SendString = "😑" }) },
 		{ key = "y", mods = "CMD", action = wezterm.action({ SendString = "😶" }) },
-		{ key = "z", mods = "CMD", action = wezterm.action({ SendString = "🙄" }) },
+		{ key = "z", mods = "CMD", action = wezterm.action.TogglePaneZoomState },
 
 		-- Numbers
 		-- { key = "1", mods = "CMD", action = wezterm.action({ SendString = "🌟" }) },
