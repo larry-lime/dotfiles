@@ -33,7 +33,8 @@ local chosen_preset = presets[color_theme][is_dark_mode and "dark" or "light"]
 
 return {
 	color_scheme = chosen_preset.color_scheme,
-	enable_tab_bar = false,
+	tab_bar_at_bottom = true,
+	enable_tab_bar = true,
 	font_size = 16.0,
 	line_height = 1.0,
 	cell_width = 1.0,
@@ -43,6 +44,12 @@ return {
 	-- font = wezterm.font("JetBrainsMono Nerd Font"),
 	window_decorations = "RESIZE",
 	keys = {
+		-- NOTE: Alt + CTRL +  Key
+		{ key = "j", mods = "ALT|CTRL", action = wezterm.action.ActivatePaneDirection("Down") },
+		{ key = "k", mods = "ALT|CTRL", action = wezterm.action.ActivatePaneDirection("Up") },
+		{ key = "h", mods = "ALT|CTRL", action = wezterm.action.ActivatePaneDirection("Left") },
+		{ key = "l", mods = "ALT|CTRL", action = wezterm.action.ActivatePaneDirection("Right") },
+
 		-- NOTE: Alt + Key
 		{ key = "a", mods = "ALT", action = wezterm.action({ SendString = "\x1ba" }) },
 		{ key = "b", mods = "ALT", action = wezterm.action({ SendString = "\x1bb" }) },
@@ -137,10 +144,10 @@ return {
 		-- { key = "Right", mods = "CMD", action = wezterm.action({ SendString = "➡️" }) },
 
 		-- NOTE: Command+Key
-		{ key = "Tab", mods = "CTRL", action = wezterm.action({ SendString = "🍑" }) },
+		{ key = "Tab", mods = "CTRL", action = wezterm.action.ActivateLastTab },
 		{ key = "a", mods = "CMD", action = wezterm.action({ SendString = "😀" }) },
 		{ key = "b", mods = "CMD", action = wezterm.action({ SendString = "😁" }) },
-		{ key = "c", mods = "CMD", action = wezterm.action({ SendString = "😂" }) },
+		-- { key = "c", mods = "CMD", action = wezterm.action({ SendString = "😂" }) },
 		{ key = "d", mods = "CMD", action = wezterm.action({ SendString = "🤣" }) },
 		{ key = "e", mods = "CMD", action = wezterm.action({ SendString = "😃" }) },
 		{ key = "f", mods = "CMD", action = wezterm.action({ SendString = "😄" }) },
@@ -157,36 +164,50 @@ return {
 		{ key = "q", mods = "CMD", action = wezterm.action({ SendString = "😚" }) },
 		{ key = "r", mods = "CMD", action = wezterm.action({ SendString = "🙂" }) },
 		{ key = "s", mods = "CMD", action = wezterm.action({ SendString = "🤗" }) },
-		{ key = "t", mods = "CMD", action = wezterm.action({ SendString = "🤩" }) },
+		-- { key = "t", mods = "CMD", action = wezterm.action({ SendString = "🤩" }) },
 		{ key = "u", mods = "CMD", action = wezterm.action({ SendString = "🤔" }) },
 		-- { key="v", mods="CMD", action=wezterm.action{SendString="🤨"} }, -- Commented out as per the original configuration
-		{ key = "w", mods = "CMD", action = wezterm.action({ SendString = "😐" }) },
+		-- { key = "w", mods = "CMD", action = wezterm.action({ SendString = "😐" }) },
 		{ key = "x", mods = "CMD", action = wezterm.action({ SendString = "😑" }) },
 		{ key = "y", mods = "CMD", action = wezterm.action({ SendString = "😶" }) },
 		{ key = "z", mods = "CMD", action = wezterm.action({ SendString = "🙄" }) },
 
 		-- Numbers
-		{ key = "1", mods = "CMD", action = wezterm.action({ SendString = "🌟" }) },
-		{ key = "2", mods = "CMD", action = wezterm.action({ SendString = "🔥" }) },
-		{ key = "3", mods = "CMD", action = wezterm.action({ SendString = "🌈" }) },
-		{ key = "4", mods = "CMD", action = wezterm.action({ SendString = "🍀" }) },
-		{ key = "5", mods = "CMD", action = wezterm.action({ SendString = "🌹" }) },
-		{ key = "6", mods = "CMD", action = wezterm.action({ SendString = "🎵" }) },
-		{ key = "7", mods = "CMD", action = wezterm.action({ SendString = "⚡" }) },
-		{ key = "8", mods = "CMD", action = wezterm.action({ SendString = "🌍" }) },
-		{ key = "9", mods = "CMD", action = wezterm.action({ SendString = "🌙" }) },
-		{ key = "0", mods = "CMD", action = wezterm.action({ SendString = "⭐" }) },
+		-- { key = "1", mods = "CMD", action = wezterm.action({ SendString = "🌟" }) },
+		-- { key = "2", mods = "CMD", action = wezterm.action({ SendString = "🔥" }) },
+		-- { key = "3", mods = "CMD", action = wezterm.action({ SendString = "🌈" }) },
+		-- { key = "4", mods = "CMD", action = wezterm.action({ SendString = "🍀" }) },
+		-- { key = "5", mods = "CMD", action = wezterm.action({ SendString = "🌹" }) },
+		-- { key = "6", mods = "CMD", action = wezterm.action({ SendString = "🎵" }) },
+		-- { key = "7", mods = "CMD", action = wezterm.action({ SendString = "⚡" }) },
+		-- { key = "8", mods = "CMD", action = wezterm.action({ SendString = "🌍" }) },
+		-- { key = "9", mods = "CMD", action = wezterm.action({ SendString = "🌙" }) },
+		-- { key = "0", mods = "CMD", action = wezterm.action({ SendString = "⭐" }) },
 
 		-- Non-letter, non-number keys with non-face emojis
 		{ key = "Space", mods = "CMD", action = wezterm.action({ SendString = "🔔" }) },
 		{ key = "Tab", mods = "CMD", action = wezterm.action({ SendString = "🔑" }) },
 		{ key = "Enter", mods = "CMD", action = wezterm.action({ SendString = "🗑️" }) },
 		-- { key = "Backspace", mods = "CMD", action = wezterm.action({ SendString = "🗑️" }) },
-		{ key = "-", mods = "CMD", action = wezterm.action({ SendString = "➖" }) },
+		{
+			key = "-",
+			mods = "CMD",
+			action = wezterm.action.SplitPane({
+				direction = "Down",
+				size = { Percent = 50 },
+			}),
+		},
 		-- { key = "|", mods = "CMD", action = wezterm.action({ SendString = "➕" }) },
 		{ key = "[", mods = "CMD", action = wezterm.action({ SendString = "📚" }) },
 		{ key = "]", mods = "CMD", action = wezterm.action({ SendString = "📖" }) },
-		{ key = "\\", mods = "CMD", action = wezterm.action({ SendString = "🔙" }) },
+		{
+			key = "\\",
+			mods = "CMD",
+			action = wezterm.action.SplitPane({
+				direction = "Right",
+				size = { Percent = 50 },
+			}),
+		},
 		{ key = ";", mods = "CMD", action = wezterm.action({ SendString = "📝" }) },
 		{ key = "'", mods = "CMD", action = wezterm.action({ SendString = "✒️" }) },
 		{ key = ",", mods = "CMD", action = wezterm.action({ SendString = "🗒️" }) },
@@ -195,8 +216,8 @@ return {
 		-- { key = "`", mods = "CMD", action = wezterm.action({ SendString = "💡" }) },
 		{ key = "UpArrow", mods = "CMD", action = wezterm.action({ SendString = "⬆️" }) },
 		{ key = "DownArrow", mods = "CMD", action = wezterm.action({ SendString = "⬇️" }) },
-		{ key = "LeftArrow", mods = "CMD", action = wezterm.action({ SendString = "📥" }) },
-		{ key = "RightArrow", mods = "CMD", action = wezterm.action({ SendString = "💡" }) },
+		{ key = "LeftArrow", mods = "CMD", action = wezterm.action.MoveTabRelative(-1) },
+		{ key = "RightArrow", mods = "CMD", action = wezterm.action.MoveTabRelative(1) },
 	},
 	mouse_bindings = {
 		-- Ctrl-click will open the link under the mouse cursor

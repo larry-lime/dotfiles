@@ -91,9 +91,11 @@ if [ -z $BASE_PATH ]; then
 fi
 
 # TODO: Here, set my current session and window as the last session
-read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
-tmux set-environment -g LAST_SESSION "$last_session"
-tmux set-environment -g LAST_WINDOW "$last_window"
+if [[ "$RUN_TMUX" = true ]]; then
+  read -r last_session last_window <<<"$(tmux display-message -p '#S:#W' | sd ':' ' ')"
+  tmux set-environment -g LAST_SESSION "$last_session"
+  tmux set-environment -g LAST_WINDOW "$last_window"
+fi
 
 BASE_NAME=$(basename $BASE_PATH)
 PARENT_PATH=$(dirname $BASE_PATH)
@@ -137,6 +139,7 @@ open_file() {
       cd $PARENT_PATH && $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
+    echo "Hello world"
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect $PARENT_PATH
     elif [[ "$RUN_WINDOWS" = true ]]; then
