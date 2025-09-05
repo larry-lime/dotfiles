@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Check if the script is running inside a tmux session.
+# If $TMUX_PANE is not set, the script is not in a tmux pane.
+if [ -z "$TMUX_PANE" ]; then
+  echo "This script needs to be run from within a tmux window."
+  exit 1
+fi
+
+# Get the session name (#S), window index/number (#I), and window name (#W)
+# for the current pane in a single command, separated by a colon.
+tmux_info=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I:#W')
+
+# Use IFS to split the colon-separated string into individual variables.
+IFS=':' read -r session_name window_number window_name <<<"$tmux_info"
+
+# Play a sound using afplay in the background.
+afplay /System/Library/Sounds/Glass.aiff &
+
+# Construct the notification body with the new information.
+notification_body="Session: $session_name | Window: $window_number - $window_name"
+
+# Send a desktop notification with the detailed information.
+osascript -e "display notification \"$notification_body\" with title \"Tmux Alert\""
