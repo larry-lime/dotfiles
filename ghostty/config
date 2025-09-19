@@ -1,14 +1,28 @@
+# Fonts
 font-family = "ComicCodeLigatures Nerd Font"
-font-size = 16
+font-size = 14
 background-opacity = 1.0
 unfocused-split-opacity = 1.0
 
-theme = dark:catppuccin-macchiato,light:catppuccin-latte
-
-keybind = cmd+\=new_split:right
-keybind = cmd+-=new_split:down
-
-keybind = cmd+z=toggle_split_zoom
+# Colors
+theme = dark:Catppuccin Macchiato,light:Catppuccin Latte
 
 macos-icon = xray
-keybind = shift+enter=text:\n
+
+# cmd+t and cmd+k map to Tnav commands
+keybind = cmd+k=text:\x06F
+keybind = cmd+t=text:\x06W
+
+# cmd+w to close window, cmd+x to close pane
+keybind = cmd+w=text:\x06&
+keybind = cmd+x=text:\x06x
+
+keybind = cmd+digit_1=text:\x061
+keybind = cmd+digit_2=text:\x062
+keybind = cmd+digit_3=text:\x063
+keybind = cmd+digit_4=text:\x064
+keybind = cmd+digit_5=text:\x065
+keybind = cmd+digit_6=text:\x066
+keybind = cmd+digit_7=text:\x067
+keybind = cmd+digit_8=text:\x068
+keybind = cmd+digit_9=text:\x069
