@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-# FIX: Fix some of the issues
+# Read current TERMINAL_THEME value from last state
 source ~/.config/zsh/macos_config.zsh
 
 # Define paths to your configuration files
@@ -9,12 +9,9 @@ NEOVIM_COLORSCHEME_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
 TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
 TNAV_CONFIG="$HOME/.local/bin/tnav"
 MACOS_CONFIG="$HOME/.dotfiles/zsh/macos_config.zsh"
-TERMINAL_CONFIG="$HOME/.config/wezterm/wezterm.lua"
 
 # NOTE: Function to switch to dark mode
 if [[ "$TERMINAL_THEME" == "light" ]]; then
-  # Update Wezterm colorscheme
-  sd 'is_dark_mode = false' 'is_dark_mode = true' $TERMINAL_CONFIG
 
   # Update Neovim colorscheme
   sd 'background = "light",' 'background = "dark",' $NEOVIM_CONFIG
@@ -27,9 +24,6 @@ if [[ "$TERMINAL_THEME" == "light" ]]; then
 
   export TERMINAL_THEME="dark"
 else
-  # Update Wezterm colorscheme
-  sd 'is_dark_mode = true' 'is_dark_mode = false' $TERMINAL_CONFIG
-
   # Update Neovim colorscheme
   sd 'background = "dark",' 'background = "light",' $NEOVIM_CONFIG
 
@@ -41,4 +35,5 @@ else
 
   export TERMINAL_THEME="light"
 fi
+
 tmux source-file $TMUX_CONFIG # Reload Tmux configuration

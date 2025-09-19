@@ -1,13 +1,12 @@
 # Install Essential Tools
 xcode-select --install
-brew install fzf bat gh fd ripgrep exa tmux node neovim kitty
+brew install fzf bat gh fd ripgrep exa tmux node neovim ghostty
 
 # Change Default Shell to Zsh
 chsh -s $(which zsh)
 
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
 
 # Source Z-Shell
 source ~/.config/zsh/.zshrc

@@ -23,7 +23,7 @@ nav_tmux() {
     fzf-tmux -p 40%,50%\
       --reverse\
       --no-sort\
-      --border-label ' Tnav '\
+      --border-label ' Tnav Sessions'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
     sed 's/.*] //' |
@@ -41,7 +41,7 @@ nav_window() {
     fzf-tmux -p 40%,50%\
       --reverse\
       --no-sort\
-      --border-label ' Tnav '\
+      --border-label ' Tnav Windows'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
     sed 's/.*] //' |
@@ -59,7 +59,7 @@ nav() {
       --reverse\
       --exact\
       --no-sort\
-      --border-label ' Tnav '\
+      --border-label ' Tnav Shell'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
     sed 's/.*] //' |

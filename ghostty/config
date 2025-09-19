@@ -17,6 +17,11 @@ keybind = cmd+t=text:\x06W
 keybind = cmd+w=text:\x06&
 keybind = cmd+x=text:\x06x
 
+# cmd+w to close window, cmd+x to close pane
+keybind = cmd+shift+\=text:\x06|
+keybind = cmd+-=text:\x06-
+
+# Go to open windows
 keybind = cmd+digit_1=text:\x061
 keybind = cmd+digit_2=text:\x062
 keybind = cmd+digit_3=text:\x063
