@@ -12,13 +12,13 @@ while IFS= read -r line; do
 done < <(yq e '.directories[]' $CONFIG_FILE)
 
 nav_tmux() {
-  local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
-  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
-  local sessions=$(sesh list --tmux --config |  sed 's/^/[s] /')
+  local windows=$(tmux list-windows -a -F "#S:#W" | sd '^' '[w] ')
+  local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
+  local sessions=$(sesh list --tmux --config |  sd '^' '[s] ')
 
   {
     echo -e "$sessions\n$windows\n$zoxide_dirs"
-    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
+    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
       --reverse\
@@ -26,13 +26,13 @@ nav_tmux() {
       --border-label ' Tnav Sessions'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
-    sed 's/.*] //' |
+    sd '.*] ' '' |
     xargs echo
 }
 
 nav_window() {
-  local windows=$(tmux list-windows -a -F "#S:#W" | sed 's/^/[w] /')
-  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
+  local windows=$(tmux list-windows -a -F "#S:#W" | sd '^' '[w] ')
+  local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
 
   # NOTE: Removed searching through saved paths
   {
@@ -44,16 +44,16 @@ nav_window() {
       --border-label ' Tnav Windows'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
-    sed 's/.*] //' |
+    sd '.*] ' '' |
     xargs echo
 }
 
 nav() {
-  local zoxide_dirs=$(sesh list --zoxide | sed 's/^/[z] /')
+  local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
 
   {
     echo -e "$zoxide_dirs"
-    fd . "$@" | sed 's|^|[p] |; s|'"$HOME"'|~|'
+    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
       --reverse\
@@ -62,7 +62,7 @@ nav() {
       --border-label ' Tnav Shell'\
       --prompt '🔎 ' \
       --expect "alt-enter,enter" | 
-    sed 's/.*] //' |
+    sd '.*] ' '' |
     xargs echo
 }
 
