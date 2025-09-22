@@ -1,17 +1,34 @@
+# NOTE: CMD+SHFIT+, to reload Ghostty config
+
+# Settings
+
 # Fonts
 font-family = "ComicCodeLigatures Nerd Font"
 font-size = 14
 background-opacity = 1.0
 unfocused-split-opacity = 1.0
 
-# Colors
+# Colors & Icon
 theme = dark:Catppuccin Macchiato,light:Catppuccin Latte
-
 macos-icon = xray
+
+# Tmux Keybinds
+
+# ctrl+tab to go to last used tmux window
+keybind = ctrl+tab=text:\x06l
 
 # cmd+t and cmd+k map to Tnav commands
 keybind = cmd+k=text:\x06F
 keybind = cmd+t=text:\x06W
+
+# cmd+g to open lazygit
+keybind = cmd+g=text:\x06G
+
+# cmd+d to open lazydocker
+keybind = cmd+d=text:\x06D
+
+# cmd+z to tmux zoom pane
+keybind = cmd+z=text:\x06z
 
 # cmd+w to close window, cmd+x to close pane
 keybind = cmd+w=text:\x06&

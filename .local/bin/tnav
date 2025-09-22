@@ -31,12 +31,12 @@ nav_tmux() {
 }
 
 nav_window() {
-  local windows=$(tmux list-windows -a -F "#S:#W" | sd '^' '[w] ')
+  local windows=$(tmux list-windows -a -F "#S:#I:#W" | sd '^' '[w] ')
   local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
 
-  # NOTE: Removed searching through saved paths
   {
     echo -e "$windows\n$zoxide_dirs"
+    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
     fzf-tmux -p 40%,50%\
       --reverse\
@@ -139,7 +139,6 @@ open_file() {
       cd $PARENT_PATH && $EDITOR $BASE_NAME
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
-    echo "Hello world"
 		if [[ "$RUN_TMUX" = true ]]; then
       sesh connect $PARENT_PATH
     elif [[ "$RUN_WINDOWS" = true ]]; then
@@ -155,9 +154,17 @@ open_file() {
 if echo "$(sesh list --tmux --config)" | rg -q "^$BASE_PATH$"; then
   sesh connect $BASE_PATH
 elif [[ "$BASE_PATH" == *":"* ]]; then
-  IFS=':' read -r session window <<< "$BASE_PATH"
-  sesh connect $session
-  tmux select-window -t $window
+  # Check if it's a window reference (session:index:name format)
+  if [[ "$BASE_PATH" == *":"*":"* ]]; then
+    IFS=':' read -r session window_index window_name <<< "$BASE_PATH"
+    sesh connect $session
+    tmux select-window -t $window_index
+  else
+    # Fallback for old format (session:window)
+    IFS=':' read -r session window <<< "$BASE_PATH"
+    sesh connect $session
+    tmux select-window -t $window
+  fi
   return
 elif [ -d $BASE_PATH ]; then
   open_directory
