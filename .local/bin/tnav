@@ -113,6 +113,13 @@ open_directory() {
     else
 			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
 			if [[ -n "$TMUX" ]]; then
+				# Check if nvim is running in the current pane
+				local pane_cmd=$(tmux display-message -p -t "$TMUX_PANE" -F "#{pane_current_command}")
+				if [[ "$pane_cmd" == "nvim" ]] || [[ "$pane_cmd" == "vim" ]]; then
+					# Exit nvim first
+					tmux send-keys -t "$TMUX_PANE" Escape ":qa!" C-m
+					sleep 0.1
+				fi
 				tmux send-keys -t "$TMUX_PANE" "cd $BASE_PATH && $EDITOR" C-m
 			else
 				cd $BASE_PATH && $EDITOR
@@ -127,6 +134,13 @@ open_directory() {
 		else
 			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
 			if [[ -n "$TMUX" ]]; then
+				# Check if nvim is running in the current pane
+				local pane_cmd=$(tmux display-message -p -t "$TMUX_PANE" -F "#{pane_current_command}")
+				if [[ "$pane_cmd" == "nvim" ]] || [[ "$pane_cmd" == "vim" ]]; then
+					# Exit nvim first
+					tmux send-keys -t "$TMUX_PANE" Escape ":qa!" C-m
+					sleep 0.1
+				fi
 				tmux send-keys -t "$TMUX_PANE" "cd $BASE_PATH" C-m
 			else
 				cd $BASE_PATH
@@ -148,6 +162,13 @@ open_file() {
 		else
 			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
 			if [[ -n "$TMUX" ]]; then
+				# Check if nvim is running in the current pane
+				local pane_cmd=$(tmux display-message -p -t "$TMUX_PANE" -F "#{pane_current_command}")
+				if [[ "$pane_cmd" == "nvim" ]] || [[ "$pane_cmd" == "vim" ]]; then
+					# Exit nvim first
+					tmux send-keys -t "$TMUX_PANE" Escape ":qa!" C-m
+					sleep 0.1
+				fi
 				tmux send-keys -t "$TMUX_PANE" "cd $PARENT_PATH && $EDITOR $BASE_NAME" C-m
 			else
 				cd $PARENT_PATH && $EDITOR $BASE_NAME
@@ -161,6 +182,13 @@ open_file() {
 		else
 			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
 			if [[ -n "$TMUX" ]]; then
+				# Check if nvim is running in the current pane
+				local pane_cmd=$(tmux display-message -p -t "$TMUX_PANE" -F "#{pane_current_command}")
+				if [[ "$pane_cmd" == "nvim" ]] || [[ "$pane_cmd" == "vim" ]]; then
+					# Exit nvim first
+					tmux send-keys -t "$TMUX_PANE" Escape ":qa!" C-m
+					sleep 0.1
+				fi
 				tmux send-keys -t "$TMUX_PANE" "cd $PARENT_PATH" C-m
 			else
 				cd $PARENT_PATH
