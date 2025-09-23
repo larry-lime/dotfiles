@@ -111,7 +111,12 @@ open_directory() {
       tmux send-keys -t "$WINDOW_ID" 'nvim' C-m
       tmux select-window -t "$WINDOW_ID"
     else
-			cd $BASE_PATH && $EDITOR
+			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
+			if [[ -n "$TMUX" ]]; then
+				tmux send-keys -t "$TMUX_PANE" "cd $BASE_PATH && $EDITOR" C-m
+			else
+				cd $BASE_PATH && $EDITOR
+			fi
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
     zoxide add $BASE_PATH
@@ -120,7 +125,12 @@ open_directory() {
     elif [[ "$RUN_WINDOWS" = true ]]; then
       tmux new-window -n $BASE_NAME -c $BASE_PATH
 		else
-			cd $BASE_PATH
+			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
+			if [[ -n "$TMUX" ]]; then
+				tmux send-keys -t "$TMUX_PANE" "cd $BASE_PATH" C-m
+			else
+				cd $BASE_PATH
+			fi
 		fi
 	else
 		return
@@ -136,7 +146,12 @@ open_file() {
       tmux send-keys -t "$WINDOW_ID" "nvim $BASE_NAME" C-m
       tmux select-window -t "$WINDOW_ID"
 		else
-      cd $PARENT_PATH && $EDITOR $BASE_NAME
+			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
+			if [[ -n "$TMUX" ]]; then
+				tmux send-keys -t "$TMUX_PANE" "cd $PARENT_PATH && $EDITOR $BASE_NAME" C-m
+			else
+				cd $PARENT_PATH && $EDITOR $BASE_NAME
+			fi
 		fi
 	elif [[ "$KEYPRESS" = "alt-enter" ]]; then
 		if [[ "$RUN_TMUX" = true ]]; then
@@ -144,7 +159,12 @@ open_file() {
     elif [[ "$RUN_WINDOWS" = true ]]; then
       tmux new-window -n $BASE_NAME -c $PARENT_PATH
 		else
-			cd $PARENT_PATH
+			# If we're in a tmux pane (not --tmux or --window mode), send commands to current pane
+			if [[ -n "$TMUX" ]]; then
+				tmux send-keys -t "$TMUX_PANE" "cd $PARENT_PATH" C-m
+			else
+				cd $PARENT_PATH
+			fi
 		fi
 	else
 		return
