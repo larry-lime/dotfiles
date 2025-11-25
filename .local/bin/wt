@@ -1,10 +1,10 @@
 #!/bin/zsh
 
 # Git Worktree Switcher for tmux
-# Handles both regular git repos and bare repo setups
 
-# First argument is the target pane ID (passed from tmux)
-TARGET_PANE="$1"
+# First argument is the target pane ID (passed from tmux). If not provided, fall back to the
+# current pane when invoked from inside tmux.
+TARGET_PANE="${1:-$TMUX_PANE}"
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -12,14 +12,6 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     sleep 1
     exit 1
 fi
-
-# Detect bare repo setup
-_is_bare_setup() {
-    local git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
-    git_common_dir=$(cd "$git_common_dir" 2>/dev/null && pwd)
-    [[ "$(basename "$git_common_dir")" == ".bare" ]] || \
-    [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]
-}
 
 # Get all worktrees
 worktrees=$(git worktree list --porcelain | grep "^worktree" | cut -d' ' -f2-)
@@ -40,4 +32,7 @@ selected=$(echo "$worktrees" |
 
 if [[ -n "$selected" && -n "$TARGET_PANE" ]]; then
     tmux send-keys -t "$TARGET_PANE" "cd '$selected'" C-m
+else
+    echo "No target pane available to cd into the selected worktree"
+    sleep 1
 fi
