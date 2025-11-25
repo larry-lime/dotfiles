@@ -18,7 +18,7 @@ IFS=':' read -r session_name window_number window_name <<<"$tmux_info"
 afplay /System/Library/Sounds/Glass.aiff &
 
 # Construct the notification body with the new information.
-notification_body="Session: $session_name | Window: $window_number - $window_name"
+notification_body="${1:+$1 | }Session: $session_name | Window: $window_number - $window_name"
 
 # Send a desktop notification with the detailed information.
 osascript -e "display notification \"$notification_body\" with title \"Tmux Alert\""

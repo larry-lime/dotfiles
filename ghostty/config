@@ -17,9 +17,10 @@ macos-icon = xray
 # ctrl+tab to go to last used tmux window
 keybind = ctrl+tab=text:\x06l
 
-# cmd+t and cmd+k map to Tnav commands
+# cmd+k, cmd+t, cmd+l to manage tmux wintows using Tnav
 keybind = cmd+k=text:\x06F
 keybind = cmd+t=text:\x06W
+keybind = cmd+l=text:\x06T
 
 # cmd+g to open lazygit
 keybind = cmd+g=text:\x06G
@@ -40,6 +41,10 @@ keybind = cmd+-=text:\x06-
 
 # cmd+n to open window
 keybind = cmd+n=text:\x06c
+
+# Tmux Window Navigation
+keybind = cmd+left=text:\x06p
+keybind = cmd+right=text:\x06n
 
 # Go to open windows
 keybind = cmd+digit_1=text:\x061

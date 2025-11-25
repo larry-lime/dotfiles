@@ -1,0 +1,43 @@
+#!/bin/zsh
+
+# Git Worktree Switcher for tmux
+# Handles both regular git repos and bare repo setups
+
+# First argument is the target pane ID (passed from tmux)
+TARGET_PANE="$1"
+
+# Check if we're in a git repository
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Error: Not in a git repository"
+    sleep 1
+    exit 1
+fi
+
+# Detect bare repo setup
+_is_bare_setup() {
+    local git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    git_common_dir=$(cd "$git_common_dir" 2>/dev/null && pwd)
+    [[ "$(basename "$git_common_dir")" == ".bare" ]] || \
+    [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]
+}
+
+# Get all worktrees
+worktrees=$(git worktree list --porcelain | grep "^worktree" | cut -d' ' -f2-)
+
+if [[ -z "$worktrees" ]]; then
+    echo "No worktrees found"
+    sleep 1
+    exit 1
+fi
+
+# Use plain fzf (we're already in a popup)
+selected=$(echo "$worktrees" |
+    fzf --reverse \
+        --prompt="Worktree > " \
+        --header="Select worktree" \
+        --preview="cd {} 2>/dev/null && git branch --show-current && echo && git log --oneline -5" \
+        --preview-window=right:50%)
+
+if [[ -n "$selected" && -n "$TARGET_PANE" ]]; then
+    tmux send-keys -t "$TARGET_PANE" "cd '$selected'" C-m
+fi
