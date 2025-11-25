@@ -13,8 +13,27 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     exit 1
 fi
 
-# Get all worktrees
-worktrees=$(git worktree list --porcelain | grep "^worktree" | cut -d' ' -f2-)
+# Get all worktrees with branch names
+worktrees=$(git worktree list --porcelain | awk '
+    /^worktree /{wt=$2; branch=""; next}
+    /^branch /{branch=$2; sub("refs/heads/","",branch); next}
+    /^detached/{branch="(detached)"; next}
+    /^bare/{branch="(bare)"; next}
+    /^$/{
+        if (wt!=""){
+            b=(branch=="" ? "(no-branch)" : branch);
+            print wt "\t" b;
+            wt=""; branch=""
+        }
+        next
+    }
+    END{
+        if (wt!=""){
+            b=(branch=="" ? "(no-branch)" : branch);
+            print wt "\t" b;
+        }
+    }
+')
 
 if [[ -z "$worktrees" ]]; then
     echo "No worktrees found"
@@ -27,11 +46,21 @@ selected=$(echo "$worktrees" |
     fzf --reverse \
         --prompt="Worktree > " \
         --header="Select worktree" \
-        --preview="cd {} 2>/dev/null && git branch --show-current && echo && git log --oneline -5" \
+        --delimiter="\t" \
+        --with-nth=1,2 \
+        --preview="cd {1} 2>/dev/null && git branch --show-current && echo && git log --oneline -5" \
         --preview-window=right:50%)
+fzf_status=$?
 
-if [[ -n "$selected" && -n "$TARGET_PANE" ]]; then
-    tmux send-keys -t "$TARGET_PANE" "cd '$selected'" C-m
+# Exit quietly if picker was cancelled
+if [[ $fzf_status -ne 0 || -z "$selected" ]]; then
+    exit 0
+fi
+
+selected_path=$(echo "$selected" | cut -f1)
+
+if [[ -n "$TARGET_PANE" ]]; then
+    tmux send-keys -t "$TARGET_PANE" "cd '$selected_path'" C-m
 else
     echo "No target pane available to cd into the selected worktree"
     sleep 1
