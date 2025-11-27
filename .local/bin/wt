@@ -6,15 +6,29 @@
 # current pane when invoked from inside tmux.
 TARGET_PANE="${1:-$TMUX_PANE}"
 
-# Check if we're in a git repository
-if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo "Error: Not in a git repository"
+# Find a git worktree to anchor against. Prefer the current dir, but fall back to any
+# immediate subdirectory (useful when the cwd is a parent folder holding multiple worktrees).
+REPO_DIR=""
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    REPO_DIR="$PWD"
+else
+    for dir in "$PWD"/*; do
+        [[ -d "$dir" ]] || continue
+        if git -C "$dir" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+            REPO_DIR="$dir"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$REPO_DIR" ]]; then
+    echo "Error: Not in a git repository and no worktrees found"
     sleep 1
     exit 1
 fi
 
 # Get all worktrees with branch names
-worktrees=$(git worktree list --porcelain | awk '
+worktrees=$(git -C "$REPO_DIR" worktree list --porcelain | awk '
     /^worktree /{wt=$2; branch=""; next}
     /^branch /{branch=$2; sub("refs/heads/","",branch); next}
     /^detached/{branch="(detached)"; next}
