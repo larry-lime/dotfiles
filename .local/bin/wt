@@ -70,3 +70,5 @@ fi
 
 selected_path=$(echo "$selected" | cut -f1)
 
+tmux send-keys -t "$TMUX_PANE" "cd \"$selected_path\"" C-m
+
