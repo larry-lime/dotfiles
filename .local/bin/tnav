@@ -20,7 +20,7 @@ nav_tmux() {
     echo -e "$sessions\n$windows\n$zoxide_dirs"
     fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,50%\
+    fzf-tmux -p 40%,70%\
       --reverse\
       --no-sort\
       --border-label ' Tnav Sessions'\
@@ -38,7 +38,7 @@ nav_window() {
     echo -e "$windows\n$zoxide_dirs"
     fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,50%\
+    fzf-tmux -p 40%,70%\
       --reverse\
       --no-sort\
       --border-label ' Tnav Windows'\
@@ -55,7 +55,7 @@ nav() {
     echo -e "$zoxide_dirs"
     fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,50%\
+    fzf-tmux -p 40%,70%\
       --reverse\
       --exact\
       --no-sort\
@@ -81,7 +81,7 @@ elif [[ $LAST_ARG =~ ^(--tmux)$ ]]; then
   read -r KEYPRESS BASE_PATH <<<"$(nav_tmux "${DIRS[@]}" | sd '~' $HOME)"
 
 elif [[ $LAST_ARG =~ ^(--relative|-r)$ ]]; then
-  cd "$(fd -t d | fzf-tmux -p 40%,50% --reverse --height=40% --layout=reverse)"
+  cd "$(fd -t d | fzf-tmux -p 40%,70% --reverse --layout=reverse)"
 else
 	echo "Invalid argument passed"
 fi

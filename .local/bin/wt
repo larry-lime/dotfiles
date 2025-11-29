@@ -1,11 +1,6 @@
 #!/bin/zsh
 
 # Git Worktree Switcher for tmux
-
-# First argument is the target pane ID (passed from tmux). If not provided, fall back to the
-# current pane when invoked from inside tmux.
-TARGET_PANE="${1:-$TMUX_PANE}"
-
 # Find a git worktree to anchor against. Prefer the current dir, but fall back to any
 # immediate subdirectory (useful when the cwd is a parent folder holding multiple worktrees).
 REPO_DIR=""
@@ -57,13 +52,13 @@ fi
 
 # Use plain fzf (we're already in a popup)
 selected=$(echo "$worktrees" |
-    fzf --reverse \
+    fzf-tmux -p 40%,70%\
+        --reverse \
         --prompt="Worktree > " \
         --header="Select worktree" \
         --delimiter="\t" \
-        --with-nth=1,2 \
-        --preview="cd {1} 2>/dev/null && git branch --show-current && echo && git log --oneline -5" \
-        --preview-window=right:50%)
+        --with-nth=1,2 )
+
 fzf_status=$?
 
 # Exit quietly if picker was cancelled
@@ -73,9 +68,3 @@ fi
 
 selected_path=$(echo "$selected" | cut -f1)
 
-if [[ -n "$TARGET_PANE" ]]; then
-    tmux send-keys -t "$TARGET_PANE" "cd '$selected_path'" C-m
-else
-    echo "No target pane available to cd into the selected worktree"
-    sleep 1
-fi
