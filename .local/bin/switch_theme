@@ -5,7 +5,6 @@ source ~/.config/zsh/macos_config.zsh
 
 # Define paths to your configuration files
 NEOVIM_CONFIG="$HOME/.config/nvim/lua/config/options.lua"
-NEOVIM_COLORSCHEME_CONFIG="$HOME/.config/nvim/lua/plugins/colorscheme.lua"
 TMUX_CONFIG="$HOME/.config/tmux/tmux-plugins.conf"
 TNAV_CONFIG="$HOME/.local/bin/tnav"
 MACOS_CONFIG="$HOME/.dotfiles/zsh/macos_config.zsh"
@@ -16,9 +15,6 @@ if [[ "$TERMINAL_THEME" == "light" ]]; then
   # Update Neovim colorscheme
   sd 'background = "light",' 'background = "dark",' $NEOVIM_CONFIG
 
-  # Update Tokyonight colorscheme
-  sd 'style = "day",' 'style = "moon",' $NEOVIM_COLORSCHEME_CONFIG
-
   # Update my zsh config
   sd 'export TERMINAL_THEME="light"' 'export TERMINAL_THEME="dark"' $MACOS_CONFIG
 
@@ -26,9 +22,6 @@ if [[ "$TERMINAL_THEME" == "light" ]]; then
 else
   # Update Neovim colorscheme
   sd 'background = "dark",' 'background = "light",' $NEOVIM_CONFIG
-
-  # Update Tokyonight colorscheme
-  sd 'style = "moon",' 'style = "day",' $NEOVIM_COLORSCHEME_CONFIG
 
   # Update my zsh config
   sd 'export TERMINAL_THEME="dark"' 'export TERMINAL_THEME="light"' $MACOS_CONFIG
