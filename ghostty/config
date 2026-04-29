@@ -2,6 +2,8 @@
 
 # Settings
 
+
+cursor-invert-fg-bg = true
 # Fonts
 font-family = "ComicCodeLigatures Nerd Font"
 font-size = 12
@@ -10,7 +12,33 @@ unfocused-split-opacity = 1.0
 
 # Colors & Icon
 theme = dark:Catppuccin Macchiato,light:Catppuccin Latte
-macos-icon = xray
+
+# macos-icon
+# Customize the macOS app icon.
+#
+# This only affects the icon that appears in the dock, application switcher, etc. This does not affect the icon in Finder because that is controlled by a hardcoded value in the signed application bundle and can't be changed at runtime. For more details on what exactly is affected, see the NSApplication.icon Apple documentation; that is the API that is being used to set the icon.
+#
+# Valid values:
+#
+#    - official - Use the official Ghostty icon.
+#    - blueprint, chalkboard, microchip, glass, holographic, paper, retro, xray - Official variants of the Ghostty icon hand-created by artists (no AI).
+#    - custom - Use a completely custom icon. The location must be specified using the additional macos-custom-icon configuration
+#    - custom-style - Use the official Ghostty icon but with custom styles applied to various layers. The custom styles must be specified using the additional macos-icon-prefixed configurations. The macos-icon-ghost-color and macos-icon-screen-color configurations are required for this style.
+
+macos-icon = holographic
+
+# macos-icon-frame
+#
+# The material to use for the frame of the macOS app icon.
+#
+# Valid values:
+#
+#    - aluminum - A brushed aluminum frame. This is the default.
+#    - beige - A classic 90's computer beige frame.
+#    - plastic - A glossy, dark plastic frame.
+#    - chrome - A shiny chrome frame.
+
+# macos-icon-frame = chrome
 
 # Tmux Keybinds
 

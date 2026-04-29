@@ -1,0 +1,24 @@
+#!/bin/bash
+# Renames tmux session and outputs the name for status-left
+# Args: $1 = session name (#S), $2 = pane_current_path
+
+session="$1"
+path="$2"
+
+tool=$(tmux show-option -qv @ai_tool)
+branch=$(git -C "$path" branch --show-current 2>/dev/null)
+
+if [ -n "$tool" ] && [ -n "$branch" ]; then
+  name="$tool - $branch"
+elif [ -n "$tool" ]; then
+  name="$tool"
+elif [ -n "$branch" ]; then
+  name="$branch"
+else
+  name="$session"
+fi
+
+# Rename the session so tmux list-sessions reflects the change
+tmux rename-session "$name" 2>/dev/null
+
+echo "$name"

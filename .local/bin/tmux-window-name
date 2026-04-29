@@ -1,0 +1,23 @@
+#!/bin/bash
+# Returns a formatted window name for tmux automatic-rename-format
+# Args: $1 = pane_current_path, $2 = pane_title
+
+path="$1"
+title="$2"
+dir=$(basename "$path")
+
+branch=$(git -C "$path" branch --show-current 2>/dev/null)
+
+if [ "$title" = "Lawrences-MacBook-Pro.local" ]; then
+  if [ -n "$branch" ]; then
+    echo "${dir}  ${branch}"
+  else
+    echo "$dir"
+  fi
+else
+  if [ -n "$branch" ]; then
+    echo "${title} - ${dir}  ${branch}"
+  else
+    echo "${title} - ${dir}"
+  fi
+fi
