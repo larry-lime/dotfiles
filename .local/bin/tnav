@@ -4,7 +4,37 @@
 
 # export FZF_DEFAULT_OPTS="--color=bg+:#363a4f,bg:#24273a,spinner:#f4dbd6,hl:#ed8796 --color=fg:#cad3f5,header:#ed8796,info:#c6a0f6,pointer:#f4dbd6 --color=marker:#f4dbd6,fg+:#cad3f5,prompt:#c6a0f6,hl+:#ed8796"
 
-for dep in tmux:tmux sesh:sesh sd:sd fd:fd rg:ripgrep fzf-tmux:fzf zoxide:zoxide; do
+# ============================================================================
+# Config
+# ============================================================================
+
+# Required CLI tools, formatted as "binary:brew-formula". Missing binaries
+# are auto-installed via brew on launch.
+DEPS=(tmux:tmux sesh:sesh sd:sd fd:fd rg:ripgrep fzf-tmux:fzf zoxide:zoxide)
+
+# Search roots — fd recursively searches these. Hidden roots (e.g.
+# ~/.dotfiles) must be listed explicitly because fd skips dotdirs by default.
+DIRS=("$HOME" "$HOME/.dotfiles")
+
+# Cap fd's traversal depth. Higher values surface more deeply nested files
+# but slow down the picker and delay cleanup when fzf exits (fd has to drain
+# its walk before SIGPIPE kills it).
+FD_MAX_DEPTH=5
+
+# Directories fd should skip entirely. ~/Library is huge on macOS and rarely
+# something we want to navigate into.
+FD_EXCLUDES=(-E Library)
+
+# fzf-tmux popup geometry passed to `-p` (width,height as percentages).
+FZF_POPUP_SIZE="40%,70%"
+
+# Flags shared across all three pickers. Per-picker flags (--exact,
+# --border-label) are still set inline.
+FZF_BASE_OPTS=(--reverse --no-sort --prompt '🔎 ' --expect 'alt-enter,enter')
+
+# ============================================================================
+
+for dep in "${DEPS[@]}"; do
   bin=${dep%:*}
   formula=${dep#*:}
   if ! command -v "$bin" >/dev/null 2>&1; then
@@ -13,10 +43,6 @@ for dep in tmux:tmux sesh:sesh sd:sd fd:fd rg:ripgrep fzf-tmux:fzf zoxide:zoxide
   fi
 done
 
-DIRS=("$HOME")
-# Add extra search roots here as needed:
-# DIRS+=("/some/other/path")
-
 nav_tmux() {
   local windows=$(tmux list-windows -a -F "#S:#W" | sd '^' '[w] ')
   local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
@@ -24,14 +50,9 @@ nav_tmux() {
 
   {
     echo -e "$sessions\n$windows\n$zoxide_dirs"
-    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
+    fd . --max-depth "$FD_MAX_DEPTH" "${FD_EXCLUDES[@]}" "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,70%\
-      --reverse\
-      --no-sort\
-      --border-label ' Tnav Sessions'\
-      --prompt '🔎 ' \
-      --expect "alt-enter,enter" | 
+    fzf-tmux -p "$FZF_POPUP_SIZE" "${FZF_BASE_OPTS[@]}" --border-label ' Tnav Sessions' |
     sd '.*] ' '' |
     xargs echo
 }
@@ -42,14 +63,9 @@ nav_window() {
 
   {
     echo -e "$windows\n$zoxide_dirs"
-    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
+    fd . --max-depth "$FD_MAX_DEPTH" "${FD_EXCLUDES[@]}" "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,70%\
-      --reverse\
-      --no-sort\
-      --border-label ' Tnav Windows'\
-      --prompt '🔎 ' \
-      --expect "alt-enter,enter" | 
+    fzf-tmux -p "$FZF_POPUP_SIZE" "${FZF_BASE_OPTS[@]}" --border-label ' Tnav Windows' |
     sd '.*] ' '' |
     xargs echo
 }
@@ -59,15 +75,9 @@ nav() {
 
   {
     echo -e "$zoxide_dirs"
-    fd . "$@" | sd '^' '[p] ' | sd "$HOME" '~'
+    fd . --max-depth "$FD_MAX_DEPTH" "${FD_EXCLUDES[@]}" "$@" | sd '^' '[p] ' | sd "$HOME" '~'
   } | rg -v '^\[w\] $|^\[z\] $|^\[s\] $|^\[p\] $' |
-    fzf-tmux -p 40%,70%\
-      --reverse\
-      --exact\
-      --no-sort\
-      --border-label ' Tnav Shell'\
-      --prompt '🔎 ' \
-      --expect "alt-enter,enter" | 
+    fzf-tmux -p "$FZF_POPUP_SIZE" "${FZF_BASE_OPTS[@]}" --exact --border-label ' Tnav Shell' |
     sd '.*] ' '' |
     xargs echo
 }
