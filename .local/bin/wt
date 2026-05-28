@@ -54,7 +54,7 @@ fi
 
 # Use plain fzf (we're already in a popup)
 selected=$(echo "$worktrees" |
-    fzf-tmux -p 40%,70%\
+    fzf \
         --reverse \
         --prompt="Worktree > " \
         --header="Select worktree" \
@@ -70,5 +70,18 @@ fi
 
 selected_path=$(echo "$selected" | cut -f1)
 
-tmux send-keys -t "$TMUX_PANE" "cd \"$selected_path\"" C-m
+# Derive a tmux-safe session name from the worktree directory basename
+session_name=$(basename "$selected_path" | tr '.: ' '___')
+
+# Create the session (rooted at the worktree) if it doesn't already exist
+if ! tmux has-session -t "=$session_name" 2>/dev/null; then
+    tmux new-session -d -s "$session_name" -c "$selected_path"
+fi
+
+# Switch to it (or attach if we're somehow outside tmux)
+if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "=$session_name"
+else
+    tmux attach-session -t "=$session_name"
+fi
 
