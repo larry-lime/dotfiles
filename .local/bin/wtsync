@@ -1,0 +1,96 @@
+#!/bin/zsh
+
+# Sync long-lived git worktrees: fetch once, then fast-forward each one.
+# Usage: wtsync [branch ...]   (defaults to main staging dev)
+# Anchors on the current repo; falls back to $WTSYNC_ROOT (default ~/HenryLabs).
+
+branches=("$@")
+(( ${#branches} )) || branches=(main staging dev)
+
+root="${WTSYNC_ROOT:-$HOME/HenryLabs/henry}"
+
+typeset -A wt_paths
+
+# Populate wt_paths with the branch -> worktree mapping of the repo at $1.
+load_worktrees() {
+    local repo="$1" line wt_path=""
+    git -C "$repo" rev-parse --is-inside-work-tree > /dev/null 2>&1 || return 1
+    wt_paths=()
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *) wt_path="${line#worktree }" ;;
+            branch\ *)   wt_paths[${${line#branch }#refs/heads/}]="$wt_path" ;;
+        esac
+    done < <(git -C "$repo" worktree list --porcelain)
+    return 0
+}
+
+# How many of the requested branches the loaded repo checks out.
+count_requested_branches() {
+    local branch n=0
+    for branch in $branches; do
+        [[ -n "${wt_paths[$branch]}" ]] && (( n++ ))
+    done
+    print -r -- $n
+}
+
+# Pick the repo covering the most of the requested branches, nearest first.
+REPO_DIR=""
+best=-1
+for candidate in "$PWD" "$PWD"/*(N/) "$root" "$root"/*(N/); do
+    load_worktrees "$candidate" || continue
+    matched=$(count_requested_branches)
+    if (( matched > best )); then
+        best=$matched
+        REPO_DIR="$candidate"
+    fi
+    (( best == ${#branches} )) && break
+done
+
+[[ -n "$REPO_DIR" ]] && load_worktrees "$REPO_DIR"
+
+if [[ -z "$REPO_DIR" ]]; then
+    echo "wtsync: no git repository found in $PWD or $root"
+    exit 1
+fi
+
+echo "==> fetching in ${REPO_DIR:t}"
+git -C "$REPO_DIR" fetch --prune --quiet || exit 1
+
+failed=0
+for branch in $branches; do
+    dir="${wt_paths[$branch]}"
+    if [[ -z "$dir" ]]; then
+        echo "==> $branch: no worktree checked out, skipping"
+        failed=1
+        continue
+    fi
+
+    if [[ -n "$(git -C "$dir" status --porcelain)" ]]; then
+        echo "==> $branch: working tree dirty, skipping ($dir)"
+        failed=1
+        continue
+    fi
+
+    upstream=$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)
+    if [[ -z "$upstream" ]]; then
+        echo "==> $branch: no upstream, skipping"
+        failed=1
+        continue
+    fi
+
+    behind=$(git -C "$dir" rev-list --count "HEAD..$upstream")
+    if [[ "$behind" == 0 ]]; then
+        echo "==> $branch: up to date"
+        continue
+    fi
+
+    if git -C "$dir" merge --ff-only --quiet "$upstream"; then
+        echo "==> $branch: +$behind commits from $upstream"
+    else
+        echo "==> $branch: fast-forward failed (diverged from $upstream)"
+        failed=1
+    fi
+done
+
+exit $failed

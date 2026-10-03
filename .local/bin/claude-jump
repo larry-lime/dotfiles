@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Jump to the tmux window where a Claude session has finished.
+#
+# claude-notify flags a window by setting @claude_done to the epoch second it
+# finished. A window counts as "seen" — and is unflagged here — once it is the
+# active window of an attached session, so the marker clears itself when you
+# land on it. No tmux hooks involved: the check is recomputed on every call, so
+# a stale flag can never produce a wrong jump.
+#
+# Usage:
+#   claude-jump           jump to the oldest pending window; picker if several
+#   claude-jump --next    jump to the oldest pending window, never prompt
+#   claude-jump --count   status-bar marker (prints nothing when none pending)
+#   claude-jump --list    pending windows, oldest first
+
+FZF_POPUP_SIZE="50%,40%"
+
+# ts|onscreen|session_id|window_id, oldest first. Only ids are emitted, so a
+# session or window named with a "|" can't corrupt the parse. Windows already
+# on screen get unflagged and dropped.
+pending() {
+  local ts onscreen sid wid
+  tmux list-windows -a -F '#{@claude_done}|#{window_active}#{session_attached}|#{session_id}|#{window_id}' 2>/dev/null |
+    grep -v '^|' |
+    while IFS='|' read -r ts onscreen sid wid; do
+      if [ "$onscreen" = "11" ]; then
+        tmux set-option -uw -t "$wid" @claude_done 2>/dev/null
+      else
+        printf '%s|%s|%s\n' "$ts" "$sid" "$wid"
+      fi
+    done | sort -n -t'|' -k1,1
+}
+
+jump_to() {
+  local sid=$1 wid=$2
+  [ -z "$wid" ] && return 1
+  if [ "$sid" != "$(tmux display-message -p '#{session_id}')" ]; then
+    tmux switch-client -t "$sid" || return 1
+  fi
+  tmux select-window -t "$wid"
+  tmux set-option -uw -t "$wid" @claude_done 2>/dev/null
+}
+
+# "session:index name (5m ago)", tab-separated from the window id.
+render() {
+  local now ts sid wid label age
+  now=$(date +%s)
+  while IFS='|' read -r ts sid wid; do
+    label=$(tmux display-message -p -t "$wid" '#S:#I #W' 2>/dev/null) || continue
+    age=$(((now - ts) / 60))
+    if [ "$age" -lt 1 ]; then
+      printf '%s\t%s (just now)\n' "$wid" "$label"
+    else
+      printf '%s\t%s (%dm ago)\n' "$wid" "$label" "$age"
+    fi
+  done
+}
+
+case "$1" in
+--count)
+  count=$(pending | grep -c .)
+  [ "$count" -gt 0 ] && printf '%s' "$count"
+  exit 0
+  ;;
+--list)
+  pending | render
+  exit 0
+  ;;
+esac
+
+rows=$(pending)
+
+if [ -z "$rows" ]; then
+  tmux display-message "No finished Claude sessions"
+  exit 0
+fi
+
+# One pending window, or --next: go straight there.
+if [ "$1" = "--next" ] || [ "$(printf '%s\n' "$rows" | wc -l)" -eq 1 ]; then
+  IFS='|' read -r _ sid wid <<<"$(printf '%s\n' "$rows" | head -1)"
+  jump_to "$sid" "$wid"
+  exit $?
+fi
+
+choice=$(printf '%s\n' "$rows" | render |
+  fzf-tmux -p "$FZF_POPUP_SIZE" --reverse --no-sort --prompt 'claude > ' \
+    --with-nth 2.. --delimiter '\t' --border-label ' Claude Done')
+
+[ -z "$choice" ] && exit 0
+wid=${choice%%$'\t'*}
+jump_to "$(tmux display-message -p -t "$wid" '#{session_id}')" "$wid"

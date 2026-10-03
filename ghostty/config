@@ -5,10 +5,18 @@
 
 cursor-invert-fg-bg = true
 # Fonts
-font-family = "ComicCodeLigatures Nerd Font"
+font-family = "Comic Code Ligatures"
 font-size = 12
+font-thicken = true
 background-opacity = 1.0
 unfocused-split-opacity = 1.0
+
+minimum-contrast = 1.1
+alpha-blending = linear-corrected
+# adjust-cell-height = 12%
+# window-padding-x = 8
+# window-padding-y = 6
+# window-padding-balance = true
 
 # Colors & Icon
 theme = dark:Catppuccin Macchiato,light:Catppuccin Latte

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Desktop + tmux notification for Claude Code hook events.
+# Reads the hook JSON payload on stdin (cwd is used for the project name), fires
+# a macOS notification, and flags the tmux window so it stands out in the status
+# bar until you visit it. Wire it up as a Stop hook in ~/.claude/settings.json.
+#
+# Usage: claude-notify [message]
+# Env:   CLAUDE_NOTIFY_SOUND  system sound name (default Glass; empty = silent)
+
+message=${1:-Finished}
+
+payload=$(cat)
+cwd=$(printf '%s' "$payload" | jq -r '.cwd // empty' 2>/dev/null)
+project=${cwd:+$(basename "$cwd")}
+
+# --- tmux: flag the window, unless you are already looking at it ------------
+location=""
+if [ -n "$TMUX_PANE" ] && command -v tmux >/dev/null 2>&1; then
+  # Two calls rather than one delimited format, so session/window names
+  # containing the delimiter can't corrupt the parse.
+  focused=$(tmux display-message -p -t "$TMUX_PANE" '#{window_active}#{session_attached}' 2>/dev/null)
+  location=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I #W' 2>/dev/null)
+
+  if [ "$focused" != "11" ]; then
+    # Timestamp doubles as the sort key for claude-jump.
+    tmux set-option -w -t "$TMUX_PANE" @claude_done "$(date +%s)" 2>/dev/null
+  fi
+  tmux display-message -t "$TMUX_PANE" "Claude: ${project:-session} $message" 2>/dev/null
+fi
+
+# --- macOS desktop notification --------------------------------------------
+title="Claude Code${project:+ - $project}"
+subtitle=${location:-${cwd:-}}
+sound=${CLAUDE_NOTIFY_SOUND-Glass}
+
+# Values go in via argv so paths and branch names can't break out of the script.
+if [ -n "$sound" ]; then
+  osascript - "$title" "$subtitle" "$message" "$sound" <<'APPLESCRIPT'
+on run argv
+  display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv) sound name (item 4 of argv)
+end run
+APPLESCRIPT
+else
+  osascript - "$title" "$subtitle" "$message" <<'APPLESCRIPT'
+on run argv
+  display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)
+end run
+APPLESCRIPT
+fi

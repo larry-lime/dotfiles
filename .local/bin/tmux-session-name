@@ -18,7 +18,4 @@ else
   name="$session"
 fi
 
-# Rename the session so tmux list-sessions reflects the change
-tmux rename-session "$name" 2>/dev/null
-
 echo "$name"
