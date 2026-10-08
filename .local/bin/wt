@@ -1,6 +1,39 @@
 #!/bin/zsh
 
 # Git Worktree Switcher for tmux
+# Backspace on an empty query detaches the selected worktree from its branch.
+
+list_worktrees() {
+    git -C "$1" worktree list --porcelain | awk '
+    /^worktree /{wt_full_path=$2; wt_display_name=$2; branch_name=""; next}
+    /^branch /{branch_name=$2; sub("refs/heads/","",branch_name); next}
+    /^detached/{branch_name="(detached)"; next}
+    /^bare/{branch_name="(bare)"; next}
+    /^$/{
+        if (wt_full_path!=""){
+            b=(branch_name=="" ? "(no-branch)" : branch_name);
+            sub(".*/", "", wt_display_name); # Extract basename for display
+            print wt_full_path "\t" wt_display_name "\t" b;
+            wt_full_path=""; wt_display_name=""; branch_name=""
+        }
+        next
+    }
+    END{
+        if (wt_full_path!=""){
+            b=(branch_name=="" ? "(no-branch)" : branch_name);
+            sub(".*/", "", wt_display_name);
+            print wt_full_path "\t" wt_display_name "\t" b;
+        }
+    }
+'
+}
+
+# Used by fzf's reload binding
+if [[ "$1" == "--list" ]]; then
+    list_worktrees "$2"
+    exit
+fi
+
 # Find a git worktree to anchor against. Prefer the current dir, but fall back to any
 # immediate subdirectory (useful when the cwd is a parent folder holding multiple worktrees).
 REPO_DIR=""
@@ -23,28 +56,7 @@ if [[ -z "$REPO_DIR" ]]; then
 fi
 
 # Get all worktrees with branch names
-worktrees=$(git -C "$REPO_DIR" worktree list --porcelain | awk '
-    /^worktree /{wt_full_path=$2; wt_display_name=$2; branch_name=""; next}
-    /^branch /{branch_name=$2; sub("refs/heads/","",branch_name); next}
-    /^detached/{branch_name="(detached)"; next}
-    /^bare/{branch_name="(bare)"; next}
-    /^$/{
-        if (wt_full_path!=""){
-            b=(branch_name=="" ? "(no-branch)" : branch_name);
-            sub(".*/", "", wt_display_name); # Extract basename for display
-            print wt_full_path "\t" wt_display_name "\t" b;
-            wt_full_path=""; wt_display_name=""; branch_name=""
-        }
-        next
-    }
-    END{
-        if (wt_full_path!=""){
-            b=(branch_name=="" ? "(no-branch)" : branch_name);
-            sub(".*/", "", wt_display_name);
-            print wt_full_path "\t" wt_display_name "\t" b;
-        }
-    }
-')
+worktrees=$(list_worktrees "$REPO_DIR")
 
 if [[ -z "$worktrees" ]]; then
     echo "No worktrees found"
@@ -57,9 +69,10 @@ selected=$(echo "$worktrees" |
     fzf \
         --reverse \
         --prompt="Worktree > " \
-        --header="Select worktree" \
+        --header="Select worktree · ⌫ on empty query: detach branch" \
         --delimiter="\t" \
-        --with-nth=2,3 )
+        --with-nth=2,3 \
+        --bind "bspace:transform:[[ -z {q} ]] && echo 'execute-silent(git -C {1} switch --detach)+reload(${(q)0:A} --list ${(q)REPO_DIR})' || echo backward-delete-char" )
 
 fzf_status=$?
 
