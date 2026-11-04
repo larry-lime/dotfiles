@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "/Users/lawrencelim/.local/share/terminal-browser/app/bin/terminal-browser" "$@"

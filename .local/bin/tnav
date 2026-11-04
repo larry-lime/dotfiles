@@ -32,6 +32,9 @@ FZF_POPUP_SIZE="40%,70%"
 # --border-label) are still set inline.
 FZF_BASE_OPTS=(--reverse --no-sort --prompt '🔎 ' --expect 'alt-enter,enter')
 
+# Session hidden from the Tnav Sessions picker (opened via prefix+a instead).
+WORKSPACE_AGENT_SESSION="🤖 Workspace Agent"
+
 # ============================================================================
 
 for dep in "${DEPS[@]}"; do
@@ -43,10 +46,24 @@ for dep in "${DEPS[@]}"; do
   fi
 done
 
+# Stable-sort lines by the session priority emoji (set via prefix+p /
+# tmux/scripts/session-prio.sh): 🚨 > 🔴 > 🟡 > 🟢 > unprefixed.
+# Lines may carry a "[s] "-style tag before the session name.
+sort_by_urgency() {
+  awk '{
+    r = 4; l = $0; sub(/^\[[a-z]\] /, "", l)
+    if (index(l, "🚨") == 1) r = 0
+    else if (index(l, "🔴") == 1) r = 1
+    else if (index(l, "🟡") == 1) r = 2
+    else if (index(l, "🟢") == 1) r = 3
+    printf "%d\t%08d\t%s\n", r, NR, $0
+  }' | sort -t $'\t' -k1,1n -k2,2n | cut -f3-
+}
+
 nav_tmux() {
-  local windows=$(tmux list-windows -a -F "#S:#W" | sd '^' '[w] ')
+  local windows=$(tmux list-windows -a -F "#S:#W" | rg -v "^$WORKSPACE_AGENT_SESSION:" | sort_by_urgency | sd '^' '[w] ')
   local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
-  local sessions=$(sesh list --tmux --config |  sd '^' '[s] ')
+  local sessions=$(sesh list --tmux --config | rg -vx "$WORKSPACE_AGENT_SESSION" | sort_by_urgency | sd '^' '[s] ')
 
   {
     echo -e "$sessions\n$windows\n$zoxide_dirs"
@@ -58,7 +75,7 @@ nav_tmux() {
 }
 
 nav_window() {
-  local windows=$(tmux list-windows -a -F "#S:#I:#W" | sd '^' '[w] ')
+  local windows=$(tmux list-windows -a -F "#S:#I:#W" | sort_by_urgency | sd '^' '[w] ')
   local zoxide_dirs=$(sesh list --zoxide | sd '^' '[z] ')
 
   {

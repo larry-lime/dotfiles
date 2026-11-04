@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Make tmux-resurrect bring Claude Code sessions back, resumed.
+#
+#   track    Claude SessionStart hook: tag this pane with its session id
+#   untrack  Claude SessionEnd hook: clear the tag (quit = don't resume)
+#   save     @resurrect-hook-post-save-all: write pane -> session id map
+#   restore  @resurrect-hook-post-restore-all: run `claude --resume` per pane
+#
+# The tag lives in a pane option (@claude_session), so it follows the pane
+# when windows are moved or renumbered; position is only resolved at save.
+
+set -euo pipefail
+
+state_dir="${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect"
+map_file="$state_dir/claude_sessions.txt"
+
+case "${1:-}" in
+  track)
+    [ -n "${TMUX_PANE:-}" ] || exit 0
+    id=$(jq -r '.session_id // empty')
+    [ -n "$id" ] && tmux set-option -p -t "$TMUX_PANE" @claude_session "$id"
+    ;;
+  untrack)
+    [ -n "${TMUX_PANE:-}" ] || exit 0
+    # Only the "exit" reason means the user quit; "clear" etc. re-track.
+    reason=$(jq -r '.reason // empty')
+    case "$reason" in clear | compact) exit 0 ;; esac
+    tmux set-option -p -u -t "$TMUX_PANE" @claude_session 2>/dev/null || true
+    ;;
+  save)
+    mkdir -p "$state_dir"
+    # Backfill from Claude's own live-session records (pid, sessionId, and
+    # tmux "<session>:@win.%pane"), for sessions the hook never tagged.
+    # Undocumented format, so best-effort only.
+    for f in "$HOME"/.claude/sessions/*.json; do
+      [ -f "$f" ] || continue
+      read -r pid id pane < <(jq -r \
+        '[.pid, .sessionId, (.tmux // "" | sub(".*\\."; ""))] | @tsv' \
+        "$f" 2>/dev/null) || continue
+      [ -n "${pane:-}" ] && kill -0 "$pid" 2>/dev/null || continue
+      tmux set-option -p -t "$pane" @claude_session "$id" 2>/dev/null || true
+    done
+    tmux list-panes -a -F \
+      '#{session_name}:#{window_index}.#{pane_index}	#{@claude_session}' |
+      awk -F'\t' '$2 != ""' >"$map_file.tmp"
+    mv "$map_file.tmp" "$map_file"
+    ;;
+  restore)
+    [ -f "$map_file" ] || exit 0
+    while IFS=$'\t' read -r target id; do
+      [ -n "$id" ] || continue
+      tmux has-session -t "${target%%:*}" 2>/dev/null || continue
+      tmux send-keys -t "$target" "claude --resume $id" Enter 2>/dev/null ||
+        true
+    done <"$map_file"
+    ;;
+  *)
+    echo "usage: $(basename "$0") track|untrack|save|restore" >&2
+    exit 2
+    ;;
+esac
