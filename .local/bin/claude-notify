@@ -8,6 +8,21 @@
 # Usage: claude-notify [message]
 # Env:   CLAUDE_NOTIFY_SOUND  system sound name (default Glass; empty = silent)
 
+# Modes:
+#   (default)    Stop hook: flag the window @claude_done (unless on screen)
+#   --attention  Claude is blocked on you (permission prompt / question):
+#                flag @claude_attention, cleared once Claude resumes
+#   --clear      Claude resumed (prompt submitted / tool ran): drop the
+#                attention flag. No notification.
+mode=done
+case "$1" in
+--attention) mode=attention; shift ;;
+--clear)
+  [ -n "$TMUX_PANE" ] && tmux set-option -uw -t "$TMUX_PANE" @claude_attention 2>/dev/null
+  exit 0
+  ;;
+esac
+
 message=${1:-Finished}
 
 payload=$(cat)
@@ -22,9 +37,15 @@ if [ -n "$TMUX_PANE" ] && command -v tmux >/dev/null 2>&1; then
   focused=$(tmux display-message -p -t "$TMUX_PANE" '#{window_active}#{session_attached}' 2>/dev/null)
   location=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I #W' 2>/dev/null)
 
-  if [ "$focused" != "11" ]; then
-    # Timestamp doubles as the sort key for claude-jump.
-    tmux set-option -w -t "$TMUX_PANE" @claude_done "$(date +%s)" 2>/dev/null
+  if [ "$mode" = attention ]; then
+    # Set even when on screen: it stays until Claude actually resumes.
+    tmux set-option -w -t "$TMUX_PANE" @claude_attention "$(date +%s)" 2>/dev/null
+  else
+    tmux set-option -uw -t "$TMUX_PANE" @claude_attention 2>/dev/null
+    if [ "$focused" != "11" ]; then
+      # Timestamp doubles as the sort key for claude-jump.
+      tmux set-option -w -t "$TMUX_PANE" @claude_done "$(date +%s)" 2>/dev/null
+    fi
   fi
   tmux display-message -t "$TMUX_PANE" "Claude: ${project:-session} $message" 2>/dev/null
 fi
