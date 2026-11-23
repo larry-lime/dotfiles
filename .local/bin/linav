@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""linav — Linear picker for tmux (Ghostty cmd+l → tmux prefix+L).
+
+Opens instantly from a local cache and refreshes from Linear in the background
+(the list reloads in place when fresh data lands).
+
+  Projects (default: led by me, like the "Led by Lawrence" view: grouped by
+  status, ordered by priority, completed/canceled hidden)
+    enter    open the project's issues
+    ctrl-a   toggle my projects / everyone's projects
+    ctrl-e   all open issues (mine, or everyone's after ctrl-a)
+  Issues
+    enter    check the issue's branch out: jumps to the worktree that has it,
+             otherwise `wt open` puts it in the first idle slot
+    esc      back to projects
+  Anywhere
+    ctrl-o   open in Linear       ctrl-p  open the PR on GitHub
+    ctrl-y   copy branch name     ctrl-r  refresh from Linear now
+
+Columns: priority, name, health, progress, lead, target date, teams; issues show
+the assignee, PR and the slot holding the branch with its Claude dot
+(red needs you, yellow working, green done — same as the status bar).
+
+Auth: personal Linear API key in the macOS Keychain (service "linear-api-key").
+Cache: ~/.cache/linav/data.json.
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+
+CACHE_DIR = os.path.expanduser("~/.cache/linav")
+CACHE = os.path.join(CACHE_DIR, "data.json")
+TTL = 60  # seconds before a background refresh
+WT_PRS = os.path.expanduser("~/.cache/wt/prs.tsv")
+HENRY = os.path.expanduser("~/HenryLabs/henry")
+SELF = os.path.realpath(__file__)
+STATE = os.environ.get("LINAV_STATE", "")
+
+GREEK = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega".split()
+GLYPH = "αβγδεζηθικλμνξοπρστυφχψω"
+
+R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
+RED, YEL, GRN, CYN = "\033[31m", "\033[33m", "\033[32m", "\033[36m"
+
+# ---------------------------------------------------------------- Linear API
+
+def api_key():
+    return subprocess.check_output(
+        ["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", "linear-api-key", "-w"],
+        text=True, stderr=subprocess.DEVNULL).strip()
+
+
+def gql(key, query, variables=None):
+    req = urllib.request.Request(
+        "https://api.linear.app/graphql",
+        data=json.dumps({"query": query, "variables": variables or {}}).encode(),
+        headers={"Authorization": key, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        out = json.load(resp)
+    if out.get("errors"):
+        raise RuntimeError(out["errors"][0].get("message"))
+    return out["data"]
+
+
+def paged(key, query, field):
+    nodes, after = [], None
+    while True:
+        page = gql(key, query, {"after": after})[field]
+        nodes += page["nodes"]
+        if not page["pageInfo"]["hasNextPage"]:
+            return nodes
+        after = page["pageInfo"]["endCursor"]
+
+
+PROJECTS_Q = """query($after:String){ projects(first:50, after:$after,
+  filter:{status:{type:{nin:["completed","canceled"]}}}){
+  pageInfo{hasNextPage endCursor}
+  nodes{ id name url priority health targetDate progress
+    status{name type position color} lead{id displayName}
+    teams(first:4){nodes{key}} initiatives(first:2){nodes{name}}
+    projectMilestones(first:8){nodes{name sortOrder progress}} } } }"""
+
+ISSUES_Q = """query($after:String){ issues(first:250, after:$after,
+  filter:{state:{type:{nin:["completed","canceled"]}}}){
+  pageInfo{hasNextPage endCursor}
+  nodes{ identifier title url branchName priority
+    state{name type position color} assignee{id displayName} project{id} } } }"""
+
+
+def fetch():
+    key = api_key()
+    with ThreadPoolExecutor(3) as pool:
+        me = pool.submit(gql, key, "{ viewer { id } }")
+        projects = pool.submit(paged, key, PROJECTS_Q, "projects")
+        issues = pool.submit(paged, key, ISSUES_Q, "issues")
+        data = {"fetched": time.time(), "me": me.result()["viewer"]["id"],
+                "projects": projects.result(), "issues": issues.result()}
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = f"{CACHE}.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, CACHE)
+    return data
+
+
+def load():
+    try:
+        with open(CACHE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+# ---------------------------------------------------------------- local state (worktrees, PRs, tmux)
+
+def worktrees():
+    """branch -> worktree path"""
+    out = subprocess.run(["git", "-C", os.path.join(HENRY, "dev"), "worktree", "list", "--porcelain"],
+                         capture_output=True, text=True).stdout
+    found, path = {}, None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            path = line[9:]
+        elif line.startswith("branch refs/heads/"):
+            found[line[18:]] = path
+    return found
+
+
+def prs():
+    """branch -> (number, state, author) from wt's cache"""
+    found = {}
+    try:
+        with open(WT_PRS) as f:
+            for line in f:
+                b, n, s, a = (line.rstrip("\n").split("\t") + ["", "", ""])[:4]
+                found[b] = (n, s, a)
+    except OSError:
+        pass
+    return found
+
+
+def claude_dots():
+    """worktree path -> coloured dot for the Claude state of its tmux session"""
+    out = subprocess.run(["tmux", "list-windows", "-a", "-F",
+                          "#{session_path}\t#{@claude_attention}\t#{@claude_working}\t#{@claude_done}"],
+                         capture_output=True, text=True).stdout
+    rank = {}
+    for line in out.splitlines():
+        p, a, w, d = (line.split("\t") + ["", "", ""])[:4]
+        r = 3 if a else 2 if w else 1 if d else 0
+        rank[p] = max(rank.get(p, 0), r)
+    colour = {3: RED, 2: YEL, 1: GRN}
+    return {p: f"{colour[r]}●{R}" for p, r in rank.items() if r}
+
+
+def place(path):
+    name = os.path.basename(path or "")
+    if name in GREEK:
+        return f"{GLYPH[GREEK.index(name)]} {name}"
+    if "/.claude/worktrees/" in (path or ""):
+        return f"⏳ {name}"
+    return name
+
+# ---------------------------------------------------------------- formatting
+
+PRIO = {1: f"{RED}!!!{R}", 2: "▮▮▮", 3: "▮▮▯", 4: "▮▯▯", 0: f"{DIM}---{R}"}
+PRIO_ORDER = {1: 0, 2: 1, 3: 2, 4: 3, 0: 4}  # Linear's priority sort: urgent first, none last
+HEALTH = {"onTrack": f"{GRN}on track {R}", "atRisk": f"{YEL}at risk  {R}", "offTrack": f"{RED}off track{R}"}
+# Status groups, most active first (types; position breaks ties within a type)
+PROJECT_TYPE_ORDER = {"started": 0, "planned": 1, "paused": 2, "backlog": 3}
+ISSUE_TYPE_ORDER = {"started": 0, "unstarted": 1, "triage": 2, "backlog": 3}
+
+
+def fit(text, width):
+    text = text or ""
+    return text[:width - 1] + "…" if len(text) > width else text.ljust(width)
+
+
+def hexcolour(h):
+    try:
+        r, g, b = int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
+        return f"\033[38;2;{r};{g};{b}m"
+    except (TypeError, ValueError):
+        return ""
+
+
+def header(name, colour, count):
+    return f"H\t-\t{hexcolour(colour)}{BOLD}▌{name}{R} {DIM}{count}{R}"
+
+
+def short_date(d):
+    return time.strftime("%b %-d", time.strptime(d, "%Y-%m-%d")) if d else ""
+
+
+def project_rows(data, scope):
+    me = data["me"]
+    projects = [p for p in data["projects"] if scope == "all" or (p.get("lead") or {}).get("id") == me]
+    open_by_project = {}
+    for i in data["issues"]:
+        pid = (i.get("project") or {}).get("id")
+        open_by_project[pid] = open_by_project.get(pid, 0) + 1
+    groups = {}
+    for p in projects:
+        groups.setdefault(p["status"]["name"], []).append(p)
+    order = sorted(groups, key=lambda n: (PROJECT_TYPE_ORDER.get(groups[n][0]["status"]["type"], 9),
+                                          groups[n][0]["status"]["position"]))
+    rows = []
+    for name in order:
+        items = sorted(groups[name], key=lambda p: (PRIO_ORDER.get(p["priority"], 9), p["name"].lower()))
+        rows.append(header(name, items[0]["status"]["color"], len(items)))
+        for p in items:
+            teams = ",".join(t["key"] for t in p["teams"]["nodes"])
+            lead = (p.get("lead") or {}).get("displayName", "")
+            ms = next((m["name"] for m in sorted(p["projectMilestones"]["nodes"], key=lambda m: m["sortOrder"])
+                       if (m.get("progress") or 0) < 1), "")
+            n_open = open_by_project.get(p["id"], 0)
+            rows.append("\t".join([
+                "P", p["id"],
+                f"{PRIO.get(p['priority'], '   ')} {fit(p['name'], 46)} "
+                f"{HEALTH.get(p.get('health'), ' ' * 9)} {DIM}{round((p.get('progress') or 0) * 100):>3}%{R} "
+                f"{fit(lead, 10)} {fit(short_date(p.get('targetDate')), 6)} {DIM}{fit(teams, 9)}{R} "
+                f"{DIM}{n_open:>3} open{R}" + (f"  {DIM}◇ {ms}{R}" if ms else "")]))
+    # Issues that belong to no project
+    loose = [i for i in data["issues"] if not i.get("project")
+             and (scope == "all" or (i.get("assignee") or {}).get("id") == me)]
+    if loose:
+        rows.append(header("No project", "#6B6F76", len(loose)))
+        rows.append(f"P\t-\t{DIM}    Issues without a project ({len(loose)}){R}")
+    return rows
+
+
+def issue_rows(data, project_id, scope):
+    me = data["me"]
+    if project_id == "*":       # every open issue in scope
+        issues = [i for i in data["issues"] if scope == "all" or (i.get("assignee") or {}).get("id") == me]
+    elif project_id == "-":     # issues without a project
+        issues = [i for i in data["issues"] if not i.get("project")
+                  and (scope == "all" or (i.get("assignee") or {}).get("id") == me)]
+    else:
+        issues = [i for i in data["issues"] if (i.get("project") or {}).get("id") == project_id]
+    wts, pr_map, dots = worktrees(), prs(), claude_dots()
+    groups = {}
+    for i in issues:
+        groups.setdefault(i["state"]["name"], []).append(i)
+    order = sorted(groups, key=lambda n: (ISSUE_TYPE_ORDER.get(groups[n][0]["state"]["type"], 9),
+                                          groups[n][0]["state"]["position"]))
+    rows = []
+    for name in order:
+        items = sorted(groups[name], key=lambda i: (PRIO_ORDER.get(i["priority"], 9), i["identifier"]))
+        rows.append(header(name, items[0]["state"]["color"], len(items)))
+        for i in items:
+            b = i.get("branchName") or ""
+            pr = pr_map.get(b)
+            path = wts.get(b)
+            who = (i.get("assignee") or {}).get("displayName", "")
+            mine = (i.get("assignee") or {}).get("id") == me
+            where = f"{CYN}{place(path)}{R} {dots.get(path, '')}" if path else ""
+            pr_label = f"#{pr[0]}{' draft' if pr[1] == 'draft' else ''}" if pr else ""
+            pr_txt = f"{GRN}{pr_label}{R}" if pr else ""
+            rows.append("\t".join([
+                "I", i["identifier"],
+                f"{PRIO.get(i['priority'], '   ')} {DIM}{fit(i['identifier'], 9)}{R} {fit(i['title'], 58)} "
+                f"{(BOLD if mine else DIM)}{fit(who or '—', 10)}{R} {pr_txt}{' ' * max(1, 14 - len(pr_label))}{where}"]))
+    return rows
+
+# ---------------------------------------------------------------- picker state
+
+def get_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"mode": "projects", "scope": "mine", "project": None, "title": ""}
+
+
+def put_state(st):
+    with open(STATE, "w") as f:
+        json.dump(st, f)
+
+
+def label(st):
+    scope = "Led by Lawrence" if st["scope"] == "mine" else "All projects"
+    if st["mode"] == "projects":
+        return f" Linear · {scope} "
+    who = "my issues" if st["scope"] == "mine" else "everyone"
+    if st["project"] == "*":
+        return f" Linear · Open issues ({who}) "
+    if st["project"] == "-":
+        return f" Linear · No project ({who}) "
+    return f" Linear › {st['title']} "
+
+
+def list_rows():
+    data = load()
+    if not data:
+        return [f"H\t-\t{DIM}Fetching from Linear…{R}"]
+    st = get_state()
+    if st["mode"] == "projects":
+        return project_rows(data, st["scope"])
+    return issue_rows(data, st["project"], st["scope"])
+
+
+def reload_action(st):
+    # The colon form takes the rest of the string, so labels need no escaping.
+    return f"reload({SELF} __list)+clear-query+first+change-border-label:{label(st)}"
+
+
+def find_issue(data, ident):
+    return next((i for i in data["issues"] if i["identifier"] == ident), None)
+
+
+def on_enter(kind, key):
+    st, data = get_state(), load() or {}
+    if kind == "P":
+        title = next((p["name"] for p in data.get("projects", []) if p["id"] == key), "")
+        st.update(mode="issues", project=key, title=title)
+        put_state(st)
+        return reload_action(st)
+    if kind == "I":
+        return f"become({SELF} __open {key})"
+    return "ignore"
+
+
+def on_back():
+    st = get_state()
+    if st["mode"] == "projects":
+        return "abort"
+    st.update(mode="projects", project=None)
+    put_state(st)
+    return reload_action(st)
+
+
+def on_scope():
+    st = get_state()
+    st["scope"] = "all" if st["scope"] == "mine" else "mine"
+    if st["mode"] == "issues" and st["project"] not in ("*", "-"):
+        st.update(mode="projects", project=None)
+    put_state(st)
+    return reload_action(st)
+
+
+def on_all_issues():
+    st = get_state()
+    st.update(mode="issues", project="*", title="")
+    put_state(st)
+    return reload_action(st)
+
+
+def url_for(kind, key):
+    data = load() or {}
+    if kind == "P":
+        return next((p["url"] for p in data.get("projects", []) if p["id"] == key), "")
+    if kind == "I":
+        return (find_issue(data, key) or {}).get("url", "")
+    return ""
+
+
+def branch_for(kind, key):
+    return (find_issue(load() or {}, key) or {}).get("branchName", "") if kind == "I" else ""
+
+
+def open_issue(ident):
+    issue = find_issue(load() or {}, ident)
+    if not issue or not issue.get("branchName"):
+        print(f"linav: no branch for {ident}")
+        time.sleep(2)
+        return 1
+    b = issue["branchName"]
+    pr = prs().get(b)
+    args = ["wt", "open", b] + ([pr[0]] if pr else [])
+    os.chdir(os.path.join(HENRY, "dev"))
+    os.execvp(args[0], args)
+
+
+def bg_refresh(force=False):
+    """Refresh the cache without blocking fzf; reload the list when done."""
+    data = load()
+    if not force and data and time.time() - data.get("fetched", 0) < TTL:
+        return
+    port = os.environ.get("FZF_PORT")
+    if os.fork():
+        return
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
+    try:
+        fetch()
+        if port:
+            req = urllib.request.Request(f"http://localhost:{port}", data=f"reload({SELF} __list)".encode(),
+                                         method="POST")
+            urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+    os._exit(0)
+
+
+def pick():
+    state = os.path.join(CACHE_DIR, f"state.{os.getpid()}.json")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    for old in os.listdir(CACHE_DIR):  # left behind by pickers that were killed
+        path = os.path.join(CACHE_DIR, old)
+        if old.startswith("state.") and time.time() - os.path.getmtime(path) > 86400:
+            os.remove(path)
+    os.environ["LINAV_STATE"] = state
+    global STATE
+    STATE = state
+    st = {"mode": "projects", "scope": "mine", "project": None, "title": ""}
+    put_state(st)
+    if not load():
+        print("Fetching from Linear…", flush=True)
+        try:
+            fetch()
+        except Exception as e:
+            print(f"linav: {e}")
+            time.sleep(3)
+            return 1
+    me = SELF
+    cmd = [
+        "fzf", "--ansi", "--reverse", "--no-sort", "--exact", "--prompt", "🔎 ",
+        "--border", "rounded", "--border-label", label(st),
+        "--delimiter", "\t", "--with-nth", "3..", "--listen",
+        "--footer", "enter open · esc back · ctrl-a mine/all · ctrl-e all issues · ctrl-o linear · ctrl-p PR · ctrl-y branch · ctrl-r refresh",
+        "--bind", f"start:execute-silent({me} __bg)",
+        "--bind", f"enter:transform({me} __enter {{1}} {{2}})",
+        "--bind", f"esc:transform({me} __back)",
+        "--bind", f"ctrl-a:transform({me} __scope)",
+        "--bind", f"ctrl-e:transform({me} __all)",
+        "--bind", f"ctrl-o:execute-silent(open \"$({me} __url {{1}} {{2}})\")",
+        "--bind", f"ctrl-p:execute-silent(b=$({me} __branch {{1}} {{2}}); [ -n \"$b\" ] && cd {HENRY}/dev && gh pr view --web \"$b\")",
+        "--bind", f"ctrl-y:execute-silent({me} __branch {{1}} {{2}} | tr -d '\\n' | pbcopy)",
+        "--bind", f"ctrl-r:execute-silent({me} __bg --force)",
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
+    proc.communicate("\n".join(list_rows()) + "\n")
+    try:
+        os.remove(state)
+    except OSError:
+        pass
+    return proc.returncode
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "":
+        return pick()
+    if cmd == "fetch":
+        fetch()
+        return 0
+    if cmd == "__list":
+        sys.stdout.write("\n".join(list_rows()) + "\n")
+        return 0
+    if cmd == "__enter":
+        print(on_enter(argv[2], argv[3]))
+        return 0
+    if cmd == "__back":
+        print(on_back())
+        return 0
+    if cmd == "__scope":
+        print(on_scope())
+        return 0
+    if cmd == "__all":
+        print(on_all_issues())
+        return 0
+    if cmd == "__url":
+        print(url_for(argv[2], argv[3]))
+        return 0
+    if cmd == "__branch":
+        print(branch_for(argv[2], argv[3]))
+        return 0
+    if cmd == "__open":
+        return open_issue(argv[2])
+    if cmd == "__bg":
+        bg_refresh(force="--force" in argv)
+        return 0
+    print(__doc__)
+    return 0 if cmd in ("-h", "--help", "help") else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

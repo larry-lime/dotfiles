@@ -74,6 +74,10 @@ Claude Code locks a worktree while a session is using it, so `locked` usually me
 
 When asked to clean up: run `wt gc --dry-run`, show the result, then `wt gc -y` once Lawrence agrees. Only use `--all`/`--force` when he asks for them by name.
 
+## Starting work from Linear — `linav` (cmd+l) and `wt open`
+
+Ghostty cmd+l → tmux prefix+O → `linav` in a popup: Lawrence's projects (the "Led by Lawrence" view), ctrl-a for everyone's, enter for a project's issues, enter on an issue to check its branch out. That runs `wt open <branch> [pr#]`: it jumps to the worktree already on the branch, otherwise puts the branch in the first idle slot (`gh pr checkout` when a PR exists, else tracks `origin/<branch>`, else creates it from `origin/dev`), runs `bun install`, and opens the slot's session. A new branch in a slot has no PR yet — open a draft PR to satisfy the slot rule. Data comes from the Linear API (key in the Keychain, service `linear-api-key`), cached in `~/.cache/linav`.
+
 ## The `wt` picker (cmd+t)
 
 Ghostty cmd+t → tmux prefix+W → `wt` in a popup. Slots first (`α alpha`…`ω omega`, cyan), then base (`◆`), then temp (`⏳`, dimmed). Enter opens/attaches a tmux session rooted at the worktree (named `α alpha` or `⏳ <name>`; existing sessions are matched by path, so priority-emoji renames are fine). `ctrl-x` deletes the selected temp worktree, `ctrl-g` runs `wt gc`.

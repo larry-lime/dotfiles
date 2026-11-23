@@ -14,6 +14,11 @@
 #                        open in a tmux pane, a process's cwd, or your current dir
 #   wt rm <path>       remove one temp worktree (asks first if it holds unsaved work)
 #   wt ls              print the classified list without fzf
+#   wt open <branch> [pr#]
+#                      open the worktree that has <branch>; if none does, put it in the
+#                      first idle slot (gh pr checkout when a PR is given, else track
+#                      origin/<branch>, else create it from origin/dev), bun install,
+#                      then open the slot's tmux session. Used by linav (cmd+l).
 #
 # Every worktree is classified by its path:
 #   slot   ~/HenryLabs/henry/<greek letter>       persistent; wt never deletes these
@@ -310,9 +315,9 @@ cmd_pick() {
   ensure_prs "$repo"
   local reload="reload(${(q)SELF} __list ${(q)repo})"
   sel=$(render "$repo" | fzf \
-    --ansi --reverse \
-    --prompt="Worktree > " \
-    --header="enter open · ctrl-x delete temp · ctrl-g gc temp · ⌫ (empty) detach" \
+    --ansi --reverse --prompt='🔎 ' \
+    --border rounded --border-label ' Worktrees' \
+    --footer="enter open · ctrl-x delete temp · ctrl-g gc temp · ⌫ (empty) detach" \
     --delimiter=$'\t' --with-nth=2 \
     --bind "ctrl-x:execute(${(q)SELF} rm {1})+$reload" \
     --bind "ctrl-g:execute(${(q)SELF} gc)+$reload" \
@@ -321,10 +326,42 @@ cmd_pick() {
   open_session "${sel%%$'\t'*}"
 }
 
+cmd_open() { # branch [pr]
+  local b=$1 pr=$2 repo p slot name
+  [[ -n $b ]] || { usage; exit 2 }
+  repo=$ROOT/dev  # always the Henry repo, wherever wt open is run from
+  p=$(worktrees "$repo" | awk -F'\t' -v b="$b" '$2 == b { print $1; exit }')
+  if [[ -n $p ]]; then open_session "$p"; return; fi
+
+  # First idle slot: detached and clean (the slot rule in the henry-worktrees skill).
+  for name in $GREEK; do
+    p=$ROOT/$name
+    [[ -d $p && -z $(git -C "$p" branch --show-current 2>/dev/null) ]] || continue
+    [[ -z $(git -C "$p" status --porcelain 2>/dev/null) ]] || continue
+    slot=$p; break
+  done
+  [[ -n $slot ]] || { print "wt: no idle slot (all 24 are on branches). Free one with ⌫ in cmd+t."; sleep 3; return 1 }
+
+  print "${GLYPH[${GREEK[(Ie)${slot:t}]}]} ${slot:t} ← $b"
+  git -C "$slot" fetch --quiet origin || { print "wt: git fetch failed"; sleep 3; return 1 }
+  if [[ -n $pr ]]; then
+    (cd "$slot" && gh pr checkout "$pr")
+  elif git -C "$slot" show-ref --verify --quiet "refs/heads/$b"; then
+    git -C "$slot" switch "$b"
+  elif git -C "$slot" show-ref --verify --quiet "refs/remotes/origin/$b"; then
+    git -C "$slot" switch --track "origin/$b"
+  else
+    git -C "$slot" switch --no-track -c "$b" origin/dev
+  fi || { print "wt: could not put ${slot:t} on $b"; sleep 3; return 1 }
+  (cd "$slot" && bun install --frozen-lockfile) || { print "wt: bun install failed (continuing)"; sleep 2 }
+  open_session "$slot"
+}
+
 case $1 in
   "") cmd_pick ;;
   gc) shift; cmd_gc "$@" ;;
   rm) shift; cmd_rm "$@" ;;
+  open) shift; cmd_open "$@" ;;
   ls) repo=$(find_repo) || exit 1; ensure_prs "$repo"; render "$repo" | cut -f2 ;;
   __list) load_prs; render "$2" ;;
   -h|--help|help) usage ;;
