@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""snav — stack picker for the current tmux window (Ghostty cmd+g → tmux prefix+B).
+
+Shows every stack / PR the window's Claude session is working on: the folders it
+worked in (recorded by `claude-notify --working` in @claude_cwds) plus the
+window's pane folders → worktree → branch → gh-stack stack (or a lone PR).
+
+Each PR row: draft/ready, review state, CI, needs-rebase / queued / merged.
+Opens instantly from ~/.cache/snav and refreshes from GitHub in the background.
+
+Keys
+  enter    open the PR on GitHub (on a stack header: the top PR)
+  ctrl-y   copy the branch name
+  ctrl-r   mark ready for review (header: every draft PR in the stack)
+  ctrl-s   gh stack sync   (fetch, cascade-rebase, push --force-with-lease)
+  ctrl-b   gh stack rebase (local only; push afterwards with ctrl-s)
+  alt-m    merge: a stack → `gh stack merge` wizard; a lone PR → merge,
+           auto-merge when checks pass, or force (--admin, skips checks)
+  ctrl-l   refresh from GitHub now
+Every write asks first, and warns when Claude is still working in that window.
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha1
+
+CACHE_DIR = os.path.expanduser("~/.cache/snav")
+PR_CACHE = os.path.join(CACHE_DIR, "prs.json")
+SELF = os.path.realpath(__file__)
+TTL = 30
+TRUNKS = {"main", "master", "dev", "develop", "staging", "trunk"}
+GREEK = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega".split()
+GLYPH = "αβγδεζηθικλμνξοπρστυφχψω"
+
+R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
+RED, YEL, GRN, CYN, MAG = "\033[31m", "\033[33m", "\033[32m", "\033[36m", "\033[35m"
+
+
+def sh(args, cwd=None):
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True).stdout.strip()
+
+
+def read_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def write_json(path, data):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = f"{path}.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+# ---------------------------------------------------------------- what is this window working on?
+
+def window_paths(window):
+    paths = [p for p in sh(["tmux", "show-options", "-wqv", "-t", window, "@claude_cwds"]).split("|") if p]
+    paths += sh(["tmux", "list-panes", "-t", window, "-F", "#{pane_current_path}"]).splitlines()
+    return paths
+
+
+def claude_state(window):
+    a, w = (sh(["tmux", "display", "-p", "-t", window, "#{@claude_attention}|#{@claude_working}"]).split("|") + ["", ""])[:2]
+    return "attention" if a else "working" if w else ""
+
+
+def place(path):
+    name = os.path.basename(path)
+    if name in GREEK:
+        return f"{GLYPH[GREEK.index(name)]} {name}"
+    if "/.claude/worktrees/" in path:
+        return f"⏳ {name}"
+    return name
+
+
+def stack_state(common_dir):
+    return read_json(os.path.join(common_dir, "gh-stack"), {}).get("stacks", [])
+
+
+def groups_for(window):
+    """[{worktree, branch, stack|None, prs:[(num, branch)], repo}] — one per distinct worktree"""
+    seen, groups = set(), []
+    for p in window_paths(window):
+        if not os.path.isdir(p):
+            continue
+        top = sh(["git", "-C", p, "rev-parse", "--show-toplevel"])
+        if not top or top in seen:
+            continue
+        seen.add(top)
+        branch = sh(["git", "-C", top, "branch", "--show-current"])
+        common = sh(["git", "-C", top, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+        g = {"worktree": top, "branch": branch, "stack": None, "prs": [], "trunk": "",
+             "repo": read_json(os.path.join(common, "gh-stack"), {}).get("repository", "")}
+        if branch:
+            for st in stack_state(common):
+                names = [b["branch"] for b in st.get("branches", [])]
+                if branch in names:
+                    g["stack"] = st.get("number") or st.get("id")
+                    g["trunk"] = (st.get("trunk") or {}).get("branch", "")
+                    g["prs"] = [((b.get("pullRequest") or {}).get("number"), b["branch"]) for b in st["branches"]]
+                    break
+            if not g["stack"]:
+                g["prs"] = [(None, branch)]
+        groups.append(g)
+    return groups
+
+# ---------------------------------------------------------------- GitHub status (cached)
+
+def repo_slug(g):
+    r = g.get("repo") or ""
+    if ":" in r:
+        return r.split(":", 1)[1]
+    url = sh(["git", "-C", g["worktree"], "remote", "get-url", "origin"])
+    return url.split("github.com")[-1].lstrip(":/").removesuffix(".git")
+
+
+PR_FIELDS = """number title url isDraft state reviewDecision mergeStateStatus headRefName
+  reviewRequests(first:5){nodes{requestedReviewer{... on User{login} ... on Team{name}}}}
+  latestReviews(first:5){nodes{author{login} state}}
+  commits(last:1){nodes{commit{statusCheckRollup{state}}}}"""
+
+
+def fetch_status(groups):
+    """Refresh PR status (GraphQL, one call per repo) and gh-stack rebase state."""
+    cache = read_json(PR_CACHE, {})
+    by_repo = {}
+    for g in groups:
+        slug = repo_slug(g)
+        for num, branch in g["prs"]:
+            by_repo.setdefault(slug, set()).add(("n", num) if num else ("b", branch))
+
+    def one_repo(slug, items):
+        owner, name = slug.split("/", 1)
+        parts = []
+        for kind, val in items:
+            if kind == "n":
+                parts.append(f"n{val}: pullRequest(number:{val}){{{PR_FIELDS}}}")
+            else:
+                alias = "b" + sha1(val.encode()).hexdigest()[:10]
+                parts.append(f'{alias}: pullRequests(headRefName:"{val}", first:1, '
+                             f'orderBy:{{field:CREATED_AT, direction:DESC}}){{nodes{{{PR_FIELDS}}}}}')
+        q = f'query{{repository(owner:"{owner}", name:"{name}"){{{" ".join(parts)}}}}}'
+        out = sh(["gh", "api", "graphql", "-f", f"query={q}"])
+        repo = (json.loads(out or "{}").get("data") or {}).get("repository") or {}
+        found = {}
+        for key, val in repo.items():
+            node = (val.get("nodes") or [None])[0] if key.startswith("b") and val else val
+            if node:
+                found[f"{slug}#{node['number']}"] = node
+                found[f"{slug}@{node['headRefName']}"] = node
+        return found
+
+    def one_stack(g):
+        out = sh(["gh", "stack", "view", "--json"], cwd=g["worktree"])
+        try:
+            return g["worktree"], {b["name"]: b for b in json.loads(out)["branches"]}
+        except (ValueError, KeyError, TypeError):
+            return g["worktree"], {}
+
+    with ThreadPoolExecutor(8) as pool:
+        repo_jobs = [pool.submit(one_repo, s, items) for s, items in by_repo.items()]
+        stack_jobs = [pool.submit(one_stack, g) for g in groups if g["stack"]]
+        for j in repo_jobs:
+            try:
+                cache.update(j.result())
+            except Exception:
+                pass
+        stacks = cache.setdefault("_stacks", {})
+        for j in stack_jobs:
+            wt, branches = j.result()
+            if branches:
+                stacks[wt] = branches
+    cache["_fetched"] = time.time()
+    write_json(PR_CACHE, cache)
+
+# ---------------------------------------------------------------- rows
+
+def pr_status(node, local):
+    """coloured status text for one PR"""
+    bits = []
+    if local.get("isMerged") or (node or {}).get("state") == "MERGED":
+        return f"{MAG}✓ merged{R}"
+    if (node or {}).get("state") == "CLOSED":
+        return f"{DIM}closed{R}"
+    if local.get("isQueued"):
+        bits.append(f"{MAG}◎ queued{R}")
+    if node:
+        bits.append(f"{DIM}draft{R}" if node["isDraft"] else f"{GRN}ready{R}")
+        rd = node.get("reviewDecision")
+        reviews = {r["author"]["login"]: r["state"] for r in node["latestReviews"]["nodes"] if r.get("author")}
+        asked = [(x["requestedReviewer"] or {}).get("login") or (x["requestedReviewer"] or {}).get("name")
+                 for x in node["reviewRequests"]["nodes"]]
+        if rd == "APPROVED":
+            bits.append(f"{GRN}✓ approved{R}")
+        elif rd == "CHANGES_REQUESTED":
+            who = ",".join(k for k, v in reviews.items() if v == "CHANGES_REQUESTED")
+            bits.append(f"{RED}✗ changes{' @' + who if who else ''}{R}")
+        elif asked:
+            bits.append(f"{YEL}◷ review @{','.join(a for a in asked if a)}{R}")
+        elif not node["isDraft"]:
+            bits.append(f"{DIM}no reviewer{R}")
+        roll = ((node["commits"]["nodes"] or [{}])[0].get("commit") or {}).get("statusCheckRollup") or {}
+        ci = roll.get("state")
+        bits.append({"SUCCESS": f"{GRN}CI ✓{R}", "FAILURE": f"{RED}CI ✗{R}", "ERROR": f"{RED}CI ✗{R}",
+                     "PENDING": f"{YEL}CI …{R}", "EXPECTED": f"{YEL}CI …{R}"}.get(ci, f"{DIM}CI –{R}"))
+    else:
+        bits.append(f"{DIM}…{R}")
+    if local.get("needsRebase"):
+        bits.append(f"{YEL}⚠ rebase{R}")
+    return " · ".join(bits)
+
+
+def fit(text, width):
+    text = text or ""
+    return text[:width - 1] + "…" if len(text) > width else text.ljust(width)
+
+
+def rows_for(window):
+    groups = groups_for(window)
+    cache = read_json(PR_CACHE, {})
+    dot = {"attention": f" {RED}●{R}", "working": f" {YEL}●{R}"}.get(claude_state(window), "")
+    rows = []
+    for g in groups:
+        slug, wt = repo_slug(g), g["worktree"]
+        local = cache.get("_stacks", {}).get(wt, {})
+        if not g["branch"]:
+            if len(groups) == 1:  # only worth a line when it's all there is
+                rows.append(f"H\t\t{wt}\t\t{CYN}{place(wt)}{R}{dot}  {DIM}detached — no branch{R}")
+            continue
+        if g["branch"] in TRUNKS and not g["stack"]:
+            rows.append(f"H\t\t{wt}\t{g['branch']}\t{CYN}{place(wt)}{R}{dot}  {DIM}on {g['branch']} (trunk, no PR){R}")
+            continue
+        top_num = next((n for n, _ in reversed(g["prs"]) if n), "")
+        if g["stack"]:
+            title = f"{BOLD}▌Stack #{g['stack']}{R} {DIM}{len(g['prs'])} PRs{R}"
+        else:
+            has_pr = cache.get(f"{slug}@{g['branch']}")
+            title = f"{BOLD}▌{'PR' if has_pr else 'Branch'}{R} {DIM}not stacked{R}"
+        rows.append(f"H\t{top_num}\t{wt}\t{g['branch']}\t{title}  {CYN}{place(wt)}{R}{dot}")
+        for num, branch in reversed(g["prs"]):  # top of the stack first, like gh stack view
+            node = cache.get(f"{slug}#{num}") if num else cache.get(f"{slug}@{branch}")
+            num = num or (node or {}).get("number") or ""
+            cur = f"{GRN}●{R}" if branch == g["branch"] else f"{DIM}○{R}"
+            label = f"#{num}" if num else "no PR"
+            name = (node or {}).get("title") or branch
+            status = pr_status(node, local.get(branch, {})) if num else f"{RED}no PR yet{R}"
+            rows.append(f"P\t{num}\t{wt}\t{branch}\t  {cur} {GRN if num else DIM}{fit(label, 7)}{R} "
+                        f"{fit(name, 54)} {status}")
+        if g["stack"]:
+            rows.append(f"T\t\t{wt}\t\t  {DIM}└ {g['trunk'] or 'trunk'}{R}")
+    if not rows:
+        rows.append(f"T\t\t\t\t{DIM}No git branch in this window (no Claude folders recorded and no pane in a repo).{R}")
+    return rows
+
+# ---------------------------------------------------------------- actions
+
+def confirm(question, window):
+    if claude_state(window) == "working":
+        print(f"{YEL}Claude is still working in this window — changing its branches can break its work.{R}")
+    ans = input(f"{question} [y/N] ").strip().lower()
+    return ans in ("y", "yes")
+
+
+def pause():
+    input(f"\n{DIM}enter to go back{R} ")
+
+
+def act(action, window, kind, num, wt, branch):
+    os.system("clear")
+    if action == "ready":
+        groups = [g for g in groups_for(window) if g["worktree"] == wt]
+        cache = read_json(PR_CACHE, {})
+        slug = repo_slug(groups[0]) if groups else ""
+        targets = [num] if kind == "P" and num and (cache.get(f"{slug}#{num}") or {}).get("isDraft", True) else []
+        if kind == "H" and groups:
+            targets = [str(n) for n, _ in groups[0]["prs"] if n and (cache.get(f"{slug}#{n}") or {}).get("isDraft", True)]
+        if not targets:
+            print("Nothing to mark ready: no PR, or it is already ready for review.")
+            return pause()
+        if confirm(f"Mark ready for review: {' '.join('#' + t for t in targets)}?", window):
+            for t in targets:
+                subprocess.run(["gh", "pr", "ready", t], cwd=wt)
+            pause()
+    elif action in ("sync", "rebase"):
+        if not confirm(f"gh stack {action} in {place(wt)}?", window):
+            return
+        subprocess.run(["gh", "stack", action], cwd=wt)
+        pause()
+    elif action == "merge":
+        group = next((g for g in groups_for(window) if g["worktree"] == wt), None)
+        if group and group["stack"]:
+            print(f"Stack #{group['stack']}: gh stack merge opens its wizard (how far up, method, confirm).")
+            print(f"{DIM}Bypassing checks isn't supported for stacks; GitHub applies branch protection.{R}\n")
+            if confirm("Continue?", window):
+                subprocess.run(["gh", "stack", "merge", num] if num else ["gh", "stack", "merge"], cwd=wt)
+                pause()
+            return
+        if not num:
+            print("This branch has no PR to merge.")
+            return pause()
+        print(f"Merge #{num}:\n  m  merge now (gh asks for the method)\n  a  auto-merge once checks pass\n"
+              f"  f  {RED}force: --admin, skip checks and branch protection{R}\n  anything else: cancel")
+        choice = input("> ").strip().lower()
+        if choice == "m":
+            subprocess.run(["gh", "pr", "merge", num], cwd=wt)
+        elif choice == "a":
+            subprocess.run(["gh", "pr", "merge", num, "--auto"], cwd=wt)
+        elif choice == "f":
+            if input(f"Type {BOLD}force{R} to admin-merge #{num} without checks: ").strip() == "force":
+                subprocess.run(["gh", "pr", "merge", num, "--admin"], cwd=wt)
+            else:
+                print("Cancelled.")
+        else:
+            return
+        pause()
+
+# ---------------------------------------------------------------- picker
+
+def bg_refresh(window, force=False):
+    if not force and time.time() - read_json(PR_CACHE, {}).get("_fetched", 0) < TTL:
+        return
+    port = os.environ.get("FZF_PORT")
+    if os.fork():
+        return
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
+    try:
+        fetch_status(groups_for(window))
+        if port:
+            urllib.request.urlopen(urllib.request.Request(
+                f"http://localhost:{port}", data=f"reload({SELF} __list {window})".encode(), method="POST"), timeout=5)
+    except Exception:
+        pass
+    os._exit(0)
+
+
+def pick(window):
+    name = sh(["tmux", "display", "-p", "-t", window, "#W"])
+    me, w = SELF, window
+    after = f"+reload({me} __list {w})+execute-silent({me} __bg {w} --force)"
+    fields = "{1} {2} {3} {4}"
+    cmd = ["fzf", "--ansi", "--reverse", "--no-sort", "--exact", "--prompt", "🔎 ",
+           "--border", "rounded", "--border-label", f" Stacks · {name} ",
+           "--delimiter", "\t", "--with-nth", "5..", "--listen",
+           "--footer", "enter PR · ctrl-r ready · ctrl-s sync · ctrl-b rebase · alt-m merge · ctrl-y branch · ctrl-l refresh",
+           "--bind", f"start:execute-silent({me} __bg {w})",
+           "--bind", "enter:execute-silent([ -n {2} ] && cd {3} && gh pr view --web {2})",
+           "--bind", "ctrl-y:execute-silent(printf %s {4} | pbcopy)",
+           "--bind", f"ctrl-r:execute({me} __act ready {w} {fields}){after}",
+           "--bind", f"ctrl-s:execute({me} __act sync {w} {fields}){after}",
+           "--bind", f"ctrl-b:execute({me} __act rebase {w} {fields}){after}",
+           "--bind", f"alt-m:execute({me} __act merge {w} {fields}){after}",
+           "--bind", f"ctrl-l:execute-silent({me} __bg {w} --force)"]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
+    proc.communicate("\n".join(rows_for(window)) + "\n")
+    return 0
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else ""
+    window = os.environ.get("SNAV_WINDOW", "")
+    if not window.startswith("@"):  # unset or not expanded by tmux: the client's current window
+        window = sh(["tmux", "display", "-p", "#{window_id}"])
+    if cmd in ("", "pick"):
+        return pick(argv[2] if len(argv) > 2 else window)
+    if cmd == "__list":
+        sys.stdout.write("\n".join(rows_for(argv[2])) + "\n")
+    elif cmd == "__bg":
+        bg_refresh(argv[2], force="--force" in argv)
+    elif cmd == "__act":
+        act(argv[2], argv[3], *(argv[4:8] + [""] * (4 - len(argv[4:8]))))
+    elif cmd == "fetch":
+        fetch_status(groups_for(argv[2] if len(argv) > 2 else window))
+    else:
+        print(__doc__)
+        return 0 if cmd in ("-h", "--help", "help") else 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

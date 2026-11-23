@@ -20,9 +20,24 @@ mode=done
 case "$1" in
 --attention) mode=attention; shift ;;
 --working)
-  [ -n "$TMUX_PANE" ] && tmux set-option -w -t "$TMUX_PANE" @claude_working "$(date +%s)" \; \
+  [ -n "$TMUX_PANE" ] || exit 0
+  tmux set-option -w -t "$TMUX_PANE" @claude_working "$(date +%s)" \; \
     set-option -uw -t "$TMUX_PANE" @claude_attention \; \
     set-option -uw -t "$TMUX_PANE" @claude_done 2>/dev/null
+  # Remember the folders this window's Claude session works in (most recent
+  # first, '|'-separated, max 8). snav (cmd+g) maps them to branches/stacks.
+  cwd=$(jq -r '.cwd // empty' 2>/dev/null)
+  if [ -n "$cwd" ]; then
+    old=$(tmux show-options -wqv -t "$TMUX_PANE" @claude_cwds 2>/dev/null)
+    case "|$old|" in
+    "|$cwd|"*) ;; # already the most recent
+    *)
+      new=$({ printf '%s\n' "$cwd"; printf '%s' "$old" | tr '|' '\n' | grep -vxF -- "$cwd"; } |
+        grep -v '^$' | head -8 | paste -sd '|' -)
+      tmux set-option -w -t "$TMUX_PANE" @claude_cwds "$new" 2>/dev/null
+      ;;
+    esac
+  fi
   exit 0
   ;;
 --clear)

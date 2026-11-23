@@ -58,8 +58,8 @@ keybind = cmd+k=text:\x06F
 keybind = cmd+t=text:\x06W
 keybind = cmd+l=text:\x06O
 
-# cmd+g to open lazygit
-keybind = cmd+g=text:\x06G
+# cmd+g: snav stack picker for the current window (lazygit stays on tmux prefix+G)
+keybind = cmd+g=text:\x06B
 
 # cmd+d to open lazydocker
 keybind = cmd+d=text:\x06D
