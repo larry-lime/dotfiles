@@ -1,31 +1,40 @@
 #!/usr/bin/env python3
-"""linav — Linear picker for tmux (Ghostty cmd+l → tmux prefix+L).
+"""linav — Linear picker for tmux (Ghostty cmd+l → tmux prefix+O).
 
-Opens instantly from a local cache and refreshes from Linear in the background
-(the list reloads in place when fresh data lands).
+Every Linear project you work on gets one Greek slot (~/HenryLabs/henry/<greek>).
+The slot and its tmux session carry the project's name; the branch checked out
+inside it is one of the project's issues.
 
   Projects (default: led by me, like the "Led by Lawrence" view: grouped by
   status, ordered by priority, completed/canceled hidden)
-    enter    open the project's issues
+    enter    go to the project's slot. A new slot is claimed from the idle ones
+             and put on the top branch of the project's most recent stack
+             (or origin/dev when the project has no branches yet)
+    tab, →   the project's issues
     ctrl-a   toggle my projects / everyone's projects
     ctrl-e   all open issues (mine, or everyone's after ctrl-a)
   Issues
-    enter    check the issue's branch out: jumps to the worktree that has it,
-             otherwise `wt open` puts it in the first idle slot
-    esc      back to projects
+    enter    check the issue's branch out in its project's slot (claiming one if
+             needed). Never switches a slot that has uncommitted changes.
+    esc, ←   back to projects
   Anywhere
     ctrl-o   open in Linear       ctrl-p  open the PR on GitHub
     ctrl-y   copy branch name     ctrl-r  refresh from Linear now
 
-Columns: priority, name, health, progress, lead, target date, teams; issues show
-the assignee, PR and the slot holding the branch with its Claude dot
-(red needs you, yellow working, green done — same as the status bar).
+Slots free themselves: when a slot's project has no open PR left, its branch's
+PR has merged or closed, the slot is clean and no Claude runs in it, it goes
+back to idle (detached at origin/dev) the next time the picker opens
+(`linav free --dry-run` shows what it would free). A slot
+claimed for new work that never got a branch is freed after a day. Branches are
+never deleted. Log: ~/.cache/linav/free.log.
 
 Auth: personal Linear API key in the macOS Keychain (service "linear-api-key").
-Cache: ~/.cache/linav/data.json.
+Cache: ~/.cache/linav/ (Linear data, open PRs). Slot tags live in each slot's
+git dir (.git/worktrees/<slot>/linav-project), never in the repo.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -34,19 +43,24 @@ from concurrent.futures import ThreadPoolExecutor
 
 CACHE_DIR = os.path.expanduser("~/.cache/linav")
 CACHE = os.path.join(CACHE_DIR, "data.json")
+PR_CACHE = os.path.join(CACHE_DIR, "prs.json")
+FREE_LOG = os.path.join(CACHE_DIR, "free.log")
 TTL = 60  # seconds before a background refresh
-WT_PRS = os.path.expanduser("~/.cache/wt/prs.tsv")
 HENRY = os.path.expanduser("~/HenryLabs/henry")
+REPO = os.path.join(HENRY, "dev")
 SELF = os.path.realpath(__file__)
 STATE = os.environ.get("LINAV_STATE", "")
+TAG = "linav-project"
+UNUSED_CLAIM_SECS = 86400  # a claimed slot that never got a branch is freed after this
 
 GREEK = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega".split()
 GLYPH = "αβγδεζηθικλμνξοπρστυφχψω"
 
 R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 RED, YEL, GRN, CYN = "\033[31m", "\033[33m", "\033[32m", "\033[36m"
+ISSUE_KEY = re.compile(r"(?<![a-z0-9])([a-z]{1,5}-\d+)(?![0-9])", re.I)
 
-# ---------------------------------------------------------------- Linear API
+# ---------------------------------------------------------------- Linear + GitHub data
 
 def api_key():
     return subprocess.check_output(
@@ -88,38 +102,75 @@ ISSUES_Q = """query($after:String){ issues(first:250, after:$after,
   filter:{state:{type:{nin:["completed","canceled"]}}}){
   pageInfo{hasNextPage endCursor}
   nodes{ identifier title url branchName priority
-    state{name type position color} assignee{id displayName} project{id} } } }"""
+    state{name type position color} assignee{id displayName} project{id name} } } }"""
+
+
+def fetch_prs():
+    out = subprocess.run(
+        ["gh", "pr", "list", "--state", "open", "--limit", "1000", "--json",
+         "number,headRefName,baseRefName,updatedAt,isDraft,author"],
+        cwd=REPO, capture_output=True, text=True, timeout=60)
+    if out.returncode:
+        raise RuntimeError(out.stderr.strip())
+    prs = [{"number": p["number"], "head": p["headRefName"], "base": p["baseRefName"],
+            "updated": p["updatedAt"], "draft": p["isDraft"], "author": (p.get("author") or {}).get("login", "")}
+           for p in json.loads(out.stdout)]
+    write_json(PR_CACHE, {"fetched": time.time(), "prs": prs})
 
 
 def fetch():
     key = api_key()
-    with ThreadPoolExecutor(3) as pool:
+    with ThreadPoolExecutor(4) as pool:
         me = pool.submit(gql, key, "{ viewer { id } }")
         projects = pool.submit(paged, key, PROJECTS_Q, "projects")
         issues = pool.submit(paged, key, ISSUES_Q, "issues")
+        prs = pool.submit(fetch_prs)
         data = {"fetched": time.time(), "me": me.result()["viewer"]["id"],
                 "projects": projects.result(), "issues": issues.result()}
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    tmp = f"{CACHE}.{os.getpid()}"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, CACHE)
+        try:
+            prs.result()
+        except Exception:
+            pass  # keep the last PR cache; Linear data still updates
+    write_json(CACHE, data)
     return data
 
 
-def load():
+def write_json(path, obj):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(obj, f)
+    os.replace(tmp, path)
+
+
+def read_json(path):
     try:
-        with open(CACHE) as f:
+        with open(path) as f:
             return json.load(f)
     except (OSError, ValueError):
         return None
 
-# ---------------------------------------------------------------- local state (worktrees, PRs, tmux)
+
+def load():
+    return read_json(CACHE)
+
+
+def open_prs():
+    """branch -> PR dict, from the cache"""
+    return {p["head"]: p for p in (read_json(PR_CACHE) or {}).get("prs", [])}
+
+# ---------------------------------------------------------------- git / tmux state
+
+def git(path, *args, check=False):
+    out = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+    if check and out.returncode:
+        raise RuntimeError((out.stderr or out.stdout).strip().splitlines()[-1] if (out.stderr or out.stdout).strip() else "git failed")
+    return out
+
 
 def worktrees():
     """branch -> worktree path"""
-    out = subprocess.run(["git", "-C", os.path.join(HENRY, "dev"), "worktree", "list", "--porcelain"],
-                         capture_output=True, text=True).stdout
+    out = git(REPO, "worktree", "list", "--porcelain").stdout
     found, path = {}, None
     for line in out.splitlines():
         if line.startswith("worktree "):
@@ -129,17 +180,44 @@ def worktrees():
     return found
 
 
-def prs():
-    """branch -> (number, state, author) from wt's cache"""
-    found = {}
+def slot_gitdir(path):
+    """The slot's private git dir, read from its .git file (no git call)."""
     try:
-        with open(WT_PRS) as f:
-            for line in f:
-                b, n, s, a = (line.rstrip("\n").split("\t") + ["", "", ""])[:4]
-                found[b] = (n, s, a)
+        with open(os.path.join(path, ".git")) as f:
+            line = f.read().strip()
     except OSError:
-        pass
-    return found
+        return None
+    return line[8:] if line.startswith("gitdir: ") else None
+
+
+def read_tag(path):
+    gd = slot_gitdir(path)
+    return read_json(os.path.join(gd, TAG)) if gd else None
+
+
+def write_tag(path, pid, name):
+    gd = slot_gitdir(path)
+    if gd:
+        write_json(os.path.join(gd, TAG), {"id": pid, "name": name, "claimed": time.time()})
+
+
+def clear_tag(path):
+    gd = slot_gitdir(path)
+    if gd:
+        try:
+            os.remove(os.path.join(gd, TAG))
+        except OSError:
+            pass
+
+
+def slot_tags():
+    """project id -> slot path, read straight from the tag files (fast)"""
+    tags = {}
+    for name in GREEK:
+        t = read_tag(os.path.join(HENRY, name))
+        if t:
+            tags.setdefault(t["id"], os.path.join(HENRY, name))
+    return tags
 
 
 def claude_dots():
@@ -156,6 +234,16 @@ def claude_dots():
     return {p: f"{colour[r]}●{R}" for p, r in rank.items() if r}
 
 
+def claude_running_in(path):
+    out = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_current_command}\t#{pane_current_path}"],
+                         capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        cmd, _, p = line.partition("\t")
+        if (p == path or p.startswith(path + "/")) and ("claude" in cmd.lower() or re.fullmatch(r"\d+\.\d+\.\d+", cmd)):
+            return True
+    return False
+
+
 def place(path):
     name = os.path.basename(path or "")
     if name in GREEK:
@@ -163,6 +251,280 @@ def place(path):
     if "/.claude/worktrees/" in (path or ""):
         return f"⏳ {name}"
     return name
+
+
+def glyph(path):
+    name = os.path.basename(path)
+    return GLYPH[GREEK.index(name)] if name in GREEK else "⏳"
+
+# ---------------------------------------------------------------- projects ↔ branches
+
+def issue_keys_of(data, pid):
+    return {i["identifier"].lower() for i in data["issues"] if (i.get("project") or {}).get("id") == pid}
+
+
+def project_of_branch(data, branch):
+    """Linear project (id, name) that a branch belongs to, via the issue key in its name."""
+    m = ISSUE_KEY.search(branch or "")
+    if not m:
+        return None
+    key = m.group(1).upper()
+    issue = next((i for i in data["issues"] if i["identifier"] == key), None)
+    proj = (issue or {}).get("project")
+    return (proj["id"], proj["name"]) if proj else None
+
+
+def stack_top(data, pid):
+    """(branch, pr) at the top of the project's most recently updated stack, or None.
+
+    Stacks come from gh-stack's metadata when it knows them, otherwise from the
+    open PRs' base → head chain. The top is the branch nothing else builds on.
+    """
+    keys = issue_keys_of(data, pid)
+    prs = [p for p in open_prs().values()
+           if (m := ISSUE_KEY.search(p["head"])) and m.group(1).lower() in keys]
+    if not prs:
+        return None
+    by_head = {p["head"]: p for p in prs}
+    # gh-stack: branch order within each local stack
+    order = {}
+    meta = read_json(os.path.join(REPO, ".git", "gh-stack")) or {}
+    for st in meta.get("stacks", []):
+        names = [b["branch"] for b in st.get("branches", [])]
+        for idx, b in enumerate(names):
+            order[b] = (st.get("id"), idx, len(names))
+    bases = {p["base"] for p in prs}
+    tops = [p for p in prs if p["head"] not in bases]
+
+    def chain_updated(top):
+        latest, cur, seen = top["updated"], top, set()
+        while cur and cur["head"] not in seen:
+            seen.add(cur["head"])
+            latest = max(latest, cur["updated"])
+            cur = by_head.get(cur["base"])
+        return latest
+
+    # Prefer gh-stack's idea of the top when the branch is in a known stack.
+    def rank(p):
+        st = order.get(p["head"])
+        is_last = st is not None and st[1] == st[2] - 1
+        return (chain_updated(p), is_last)
+
+    best = max(tops or prs, key=rank)
+    return best["head"], best
+
+# ---------------------------------------------------------------- slots: claim, switch, free
+
+def slot_state(path):
+    branch = git(path, "branch", "--show-current").stdout.strip()
+    dirty = git(path, "status", "--porcelain").stdout.strip()
+    return branch, dirty
+
+
+def slot_for_project(data, pid, name):
+    tags = slot_tags()
+    if pid in tags:
+        return tags[pid], False
+    # Adopt a slot already on one of the project's branches (checked out before linav).
+    for slot in GREEK:
+        path = os.path.join(HENRY, slot)
+        if read_tag(path) or not os.path.isdir(path):
+            continue
+        branch = git(path, "branch", "--show-current").stdout.strip()
+        if branch and (project_of_branch(data, branch) or ("",))[0] == pid:
+            write_tag(path, pid, name)
+            return path, False
+    for slot in GREEK:  # first idle slot: untagged, detached, clean
+        path = os.path.join(HENRY, slot)
+        if not os.path.isdir(path) or read_tag(path):
+            continue
+        branch, dirty = slot_state(path)
+        if not branch and not dirty:
+            write_tag(path, pid, name)
+            return path, True
+    return None, False
+
+
+def lock_blob(path):
+    return git(path, "rev-parse", "-q", "--verify", "HEAD:bun.lock").stdout.strip()
+
+
+def switch(path, branch, pr):
+    """Put the slot on branch. Returns the worktree to open (another one when the
+    branch is already checked out elsewhere), or None when it refused."""
+    current, dirty = slot_state(path)
+    if current == branch:
+        return path
+    elsewhere = worktrees().get(branch)
+    if elsewhere and elsewhere != path:
+        print(f"{branch} is already checked out in {place(elsewhere)}; opening it there.")
+        time.sleep(1.2)
+        return elsewhere
+    if dirty:
+        print(f"{place(path)} has uncommitted changes, so it stays on {current or 'its current commit'}:")
+        print("\n".join("  " + l for l in dirty.splitlines()[:12]))
+        input("\nCommit or stash them, then try again. [enter] ")
+        return None
+    before = lock_blob(path)
+    print(f"{place(path)} ← {branch}", flush=True)
+    git(path, "fetch", "--quiet", "origin")
+    has_local = git(path, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0
+    has_remote = git(path, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}").returncode == 0
+    if has_local:
+        out = git(path, "switch", branch)
+        if out.returncode == 0 and has_remote:
+            git(path, "merge", "--ff-only", "--quiet", f"origin/{branch}")  # catch up; no-op if diverged
+    elif pr and not has_remote:
+        out = subprocess.run(["gh", "pr", "checkout", str(pr["number"])], cwd=path, capture_output=True, text=True)
+    elif has_remote:
+        out = git(path, "switch", "--track", f"origin/{branch}")
+    else:
+        out = git(path, "switch", "--no-track", "-c", branch, "origin/dev")
+    if out.returncode:
+        print(f"Could not switch {place(path)} to {branch}:\n  {(out.stderr or out.stdout).strip()}")
+        input("[enter] ")
+        return None
+    if lock_blob(path) != before:
+        print("bun.lock changed → bun install", flush=True)
+        subprocess.run(["bun", "install", "--frozen-lockfile"], cwd=path)
+    return path
+
+
+def fresh_dev(path):
+    git(path, "fetch", "--quiet", "origin")
+    before = lock_blob(path)
+    git(path, "switch", "--quiet", "--detach", "origin/dev")
+    if lock_blob(path) != before:
+        subprocess.run(["bun", "install", "--frozen-lockfile"], cwd=path)
+
+
+def session_name(path, title):
+    name = f"{glyph(path)} {title}" if title else place(path)
+    return re.sub(r"[.:]", "_", name)[:60]
+
+
+def open_session(path, title):
+    out = subprocess.run(["tmux", "list-sessions", "-F", "#{session_id}\t#{session_name}\t#{session_path}"],
+                         capture_output=True, text=True).stdout
+    sid, current = None, ""
+    for line in out.splitlines():
+        s, n, p = (line.split("\t") + ["", ""])[:3]
+        if p == path:
+            sid, current = s, n
+            break
+    want = session_name(path, title)
+    if sid is None:
+        name, n = want, 2
+        while subprocess.run(["tmux", "has-session", "-t", f"={name}"], capture_output=True).returncode == 0:
+            name, n = f"{want}-{n}", n + 1
+        sid = subprocess.run(["tmux", "new-session", "-d", "-P", "-F", "#{session_id}", "-s", name, "-c", path],
+                             capture_output=True, text=True).stdout.strip()
+    elif title and not current.endswith(want):
+        # Keep a priority-emoji prefix (prefix+p) when renaming to the project.
+        prefix = current[:2] if current[:1] in "🚨🔴🟡🟢" else ""
+        subprocess.run(["tmux", "rename-session", "-t", sid, prefix + want], capture_output=True)
+    if os.environ.get("TMUX"):
+        subprocess.run(["tmux", "switch-client", "-t", sid])
+    else:
+        os.execvp("tmux", ["tmux", "attach-session", "-t", sid])
+
+
+def go_project(pid):
+    data = load() or {}
+    proj = next((p for p in data.get("projects", []) if p["id"] == pid), None)
+    if not proj:
+        print("linav: project not found (refresh with ctrl-r)")
+        time.sleep(2)
+        return 1
+    path, claimed = slot_for_project(data, pid, proj["name"])
+    if not path:
+        input("No idle slot: all 24 are holding projects. [enter] ")
+        return 1
+    if claimed:
+        top = stack_top(data, pid)
+        if top:
+            path = switch(path, top[0], top[1]) or path
+        else:
+            print(f"{place(path)} ← {proj['name']} (origin/dev, no branches yet)", flush=True)
+            fresh_dev(path)
+    open_session(path, proj["name"])
+    return 0
+
+
+def go_issue(ident):
+    data = load() or {}
+    issue = next((i for i in data.get("issues", []) if i["identifier"] == ident), None)
+    if not issue or not issue.get("branchName"):
+        input(f"linav: no branch for {ident}. [enter] ")
+        return 1
+    proj = issue.get("project") or {"id": f"issue:{ident}", "name": f"{ident} {issue['title']}"}
+    path, _ = slot_for_project(data, proj["id"], proj["name"])
+    if not path:
+        input("No idle slot: all 24 are holding projects. [enter] ")
+        return 1
+    target = switch(path, issue["branchName"], open_prs().get(issue["branchName"]))
+    if not target:
+        target = path  # refused (dirty): still take you to the project's slot
+    title = proj["name"] if target == path else ""
+    open_session(target, title)
+    return 0
+
+
+def log_free(msg):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(FREE_LOG, "a") as f:
+        f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+
+
+def pr_closed(branch):
+    """True when the branch's most recent PR is merged or closed."""
+    out = subprocess.run(["gh", "pr", "list", "--state", "all", "--head", branch, "--limit", "1",
+                          "--json", "state"], cwd=REPO, capture_output=True, text=True)
+    try:
+        prs = json.loads(out.stdout)
+    except ValueError:
+        return False
+    return bool(prs) and prs[0]["state"] in ("MERGED", "CLOSED")
+
+
+def auto_free(data, dry=False):
+    """Return finished project slots to idle. Conservative: clean, no Claude,
+    nothing open left in the project."""
+    prs = open_prs()
+    for slot in GREEK:
+        path = os.path.join(HENRY, slot)
+        tag = read_tag(path)
+        if not tag:
+            continue
+        branch, dirty = slot_state(path)
+        if dirty or claude_running_in(path):
+            continue
+        if tag["id"].startswith("issue:"):
+            keys = {tag["id"][6:].lower()}
+        else:
+            keys = issue_keys_of(data, tag["id"])
+        project_open = [p for p in prs.values()
+                        if (m := ISSUE_KEY.search(p["head"])) and m.group(1).lower() in keys]
+        if project_open:
+            continue
+        if branch:
+            if branch in prs or not pr_closed(branch):
+                continue
+        elif time.time() - tag.get("claimed", 0) < UNUSED_CLAIM_SECS:
+            continue
+        if dry:
+            print(f"would free {slot} ({tag['name']}; on {branch or 'origin/dev'})")
+            continue
+        fresh_dev(path)
+        clear_tag(path)
+        # Close the slot's session unless someone is looking at it.
+        out = subprocess.run(["tmux", "list-sessions", "-F", "#{session_id}\t#{session_path}\t#{session_attached}"],
+                             capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            sid, p, attached = (line.split("\t") + ["", ""])[:3]
+            if p == path and attached == "0":
+                subprocess.run(["tmux", "kill-session", "-t", sid], capture_output=True)
+        log_free(f"freed {slot} ({tag['name']}; was on {branch or 'origin/dev'})")
 
 # ---------------------------------------------------------------- formatting
 
@@ -202,6 +564,7 @@ def project_rows(data, scope):
     for i in data["issues"]:
         pid = (i.get("project") or {}).get("id")
         open_by_project[pid] = open_by_project.get(pid, 0) + 1
+    tags, dots = slot_tags(), claude_dots()
     groups = {}
     for p in projects:
         groups.setdefault(p["status"]["name"], []).append(p)
@@ -216,19 +579,19 @@ def project_rows(data, scope):
             lead = (p.get("lead") or {}).get("displayName", "")
             ms = next((m["name"] for m in sorted(p["projectMilestones"]["nodes"], key=lambda m: m["sortOrder"])
                        if (m.get("progress") or 0) < 1), "")
-            n_open = open_by_project.get(p["id"], 0)
+            slot = tags.get(p["id"])
+            where = f"{CYN}{glyph(slot)}{R}{dots.get(slot, ' ')}" if slot else "  "
             rows.append("\t".join([
                 "P", p["id"],
-                f"{PRIO.get(p['priority'], '   ')} {fit(p['name'], 46)} "
+                f"{where} {PRIO.get(p['priority'], '   ')} {fit(p['name'], 44)} "
                 f"{HEALTH.get(p.get('health'), ' ' * 9)} {DIM}{round((p.get('progress') or 0) * 100):>3}%{R} "
                 f"{fit(lead, 10)} {fit(short_date(p.get('targetDate')), 6)} {DIM}{fit(teams, 9)}{R} "
-                f"{DIM}{n_open:>3} open{R}" + (f"  {DIM}◇ {ms}{R}" if ms else "")]))
-    # Issues that belong to no project
+                f"{DIM}{open_by_project.get(p['id'], 0):>3} open{R}" + (f"  {DIM}◇ {ms}{R}" if ms else "")]))
     loose = [i for i in data["issues"] if not i.get("project")
              and (scope == "all" or (i.get("assignee") or {}).get("id") == me)]
     if loose:
         rows.append(header("No project", "#6B6F76", len(loose)))
-        rows.append(f"P\t-\t{DIM}    Issues without a project ({len(loose)}){R}")
+        rows.append(f"N\t-\t{DIM}      Issues without a project ({len(loose)}){R}")
     return rows
 
 
@@ -241,7 +604,7 @@ def issue_rows(data, project_id, scope):
                   and (scope == "all" or (i.get("assignee") or {}).get("id") == me)]
     else:
         issues = [i for i in data["issues"] if (i.get("project") or {}).get("id") == project_id]
-    wts, pr_map, dots = worktrees(), prs(), claude_dots()
+    wts, pr_map, dots = worktrees(), open_prs(), claude_dots()
     groups = {}
     for i in issues:
         groups.setdefault(i["state"]["name"], []).append(i)
@@ -258,7 +621,7 @@ def issue_rows(data, project_id, scope):
             who = (i.get("assignee") or {}).get("displayName", "")
             mine = (i.get("assignee") or {}).get("id") == me
             where = f"{CYN}{place(path)}{R} {dots.get(path, '')}" if path else ""
-            pr_label = f"#{pr[0]}{' draft' if pr[1] == 'draft' else ''}" if pr else ""
+            pr_label = f"#{pr['number']}{' draft' if pr['draft'] else ''}" if pr else ""
             pr_txt = f"{GRN}{pr_label}{R}" if pr else ""
             rows.append("\t".join([
                 "I", i["identifier"],
@@ -308,19 +671,29 @@ def reload_action(st):
     return f"reload({SELF} __list)+clear-query+first+change-border-label:{label(st)}"
 
 
-def find_issue(data, ident):
-    return next((i for i in data["issues"] if i["identifier"] == ident), None)
+def show_issues(key):
+    st, data = get_state(), load() or {}
+    title = next((p["name"] for p in data.get("projects", []) if p["id"] == key), "")
+    st.update(mode="issues", project=key, title=title)
+    put_state(st)
+    return reload_action(st)
 
 
 def on_enter(kind, key):
-    st, data = get_state(), load() or {}
     if kind == "P":
-        title = next((p["name"] for p in data.get("projects", []) if p["id"] == key), "")
-        st.update(mode="issues", project=key, title=title)
-        put_state(st)
-        return reload_action(st)
+        return f"become({SELF} __go P {key})"
+    if kind == "N":
+        return show_issues("-")
     if kind == "I":
-        return f"become({SELF} __open {key})"
+        return f"become({SELF} __go I {key})"
+    return "ignore"
+
+
+def on_right(kind, key):
+    if kind == "P":
+        return show_issues(key)
+    if kind == "N":
+        return show_issues("-")
     return "ignore"
 
 
@@ -331,6 +704,10 @@ def on_back():
     st.update(mode="projects", project=None)
     put_state(st)
     return reload_action(st)
+
+
+def on_left():
+    return "ignore" if get_state()["mode"] == "projects" else on_back()
 
 
 def on_scope():
@@ -354,29 +731,23 @@ def url_for(kind, key):
     if kind == "P":
         return next((p["url"] for p in data.get("projects", []) if p["id"] == key), "")
     if kind == "I":
-        return (find_issue(data, key) or {}).get("url", "")
+        return next((i["url"] for i in data.get("issues", []) if i["identifier"] == key), "")
     return ""
 
 
 def branch_for(kind, key):
-    return (find_issue(load() or {}, key) or {}).get("branchName", "") if kind == "I" else ""
-
-
-def open_issue(ident):
-    issue = find_issue(load() or {}, ident)
-    if not issue or not issue.get("branchName"):
-        print(f"linav: no branch for {ident}")
-        time.sleep(2)
-        return 1
-    b = issue["branchName"]
-    pr = prs().get(b)
-    args = ["wt", "open", b] + ([pr[0]] if pr else [])
-    os.chdir(os.path.join(HENRY, "dev"))
-    os.execvp(args[0], args)
+    data = load() or {}
+    if kind == "I":
+        return next((i.get("branchName", "") for i in data.get("issues", []) if i["identifier"] == key), "")
+    if kind == "P":
+        top = stack_top(data, key)
+        return top[0] if top else ""
+    return ""
 
 
 def bg_refresh(force=False):
-    """Refresh the cache without blocking fzf; reload the list when done."""
+    """Refresh the caches and free finished slots without blocking fzf; reload
+    the list when done."""
     data = load()
     if not force and data and time.time() - data.get("fetched", 0) < TTL:
         return
@@ -390,7 +761,11 @@ def bg_refresh(force=False):
     for fd in (0, 1, 2):
         os.dup2(devnull, fd)
     try:
-        fetch()
+        data = fetch()
+        try:
+            auto_free(data)
+        except Exception as e:
+            log_free(f"auto-free error: {e}")
         if port:
             req = urllib.request.Request(f"http://localhost:{port}", data=f"reload({SELF} __list)".encode(),
                                          method="POST")
@@ -401,12 +776,12 @@ def bg_refresh(force=False):
 
 
 def pick():
-    state = os.path.join(CACHE_DIR, f"state.{os.getpid()}.json")
     os.makedirs(CACHE_DIR, exist_ok=True)
     for old in os.listdir(CACHE_DIR):  # left behind by pickers that were killed
         path = os.path.join(CACHE_DIR, old)
         if old.startswith("state.") and time.time() - os.path.getmtime(path) > 86400:
             os.remove(path)
+    state = os.path.join(CACHE_DIR, f"state.{os.getpid()}.json")
     os.environ["LINAV_STATE"] = state
     global STATE
     STATE = state
@@ -425,14 +800,17 @@ def pick():
         "fzf", "--ansi", "--reverse", "--no-sort", "--exact", "--prompt", "🔎 ",
         "--border", "rounded", "--border-label", label(st),
         "--delimiter", "\t", "--with-nth", "3..", "--listen",
-        "--footer", "enter open · esc back · ctrl-a mine/all · ctrl-e all issues · ctrl-o linear · ctrl-p PR · ctrl-y branch · ctrl-r refresh",
+        "--footer", "enter go · tab issues · esc back · ctrl-a mine/all · ctrl-e all issues · ctrl-o linear · ctrl-p PR · ctrl-y branch · ctrl-r refresh",
         "--bind", f"start:execute-silent({me} __bg)",
         "--bind", f"enter:transform({me} __enter {{1}} {{2}})",
+        "--bind", f"tab:transform({me} __right {{1}} {{2}})",
+        "--bind", f"right:transform({me} __right {{1}} {{2}})",
+        "--bind", f"left:transform({me} __left)",
         "--bind", f"esc:transform({me} __back)",
         "--bind", f"ctrl-a:transform({me} __scope)",
         "--bind", f"ctrl-e:transform({me} __all)",
         "--bind", f"ctrl-o:execute-silent(open \"$({me} __url {{1}} {{2}})\")",
-        "--bind", f"ctrl-p:execute-silent(b=$({me} __branch {{1}} {{2}}); [ -n \"$b\" ] && cd {HENRY}/dev && gh pr view --web \"$b\")",
+        "--bind", f"ctrl-p:execute-silent(b=$({me} __branch {{1}} {{2}}); [ -n \"$b\" ] && cd {REPO} && gh pr view --web \"$b\")",
         "--bind", f"ctrl-y:execute-silent({me} __branch {{1}} {{2}} | tr -d '\\n' | pbcopy)",
         "--bind", f"ctrl-r:execute-silent({me} __bg --force)",
     ]
@@ -447,25 +825,26 @@ def pick():
 
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ""
+    simple = {"__back": on_back, "__left": on_left, "__scope": on_scope, "__all": on_all_issues}
     if cmd == "":
         return pick()
     if cmd == "fetch":
         fetch()
         return 0
+    if cmd == "free":
+        auto_free(load() or fetch(), dry="--dry-run" in argv)
+        return 0
     if cmd == "__list":
         sys.stdout.write("\n".join(list_rows()) + "\n")
+        return 0
+    if cmd in simple:
+        print(simple[cmd]())
         return 0
     if cmd == "__enter":
         print(on_enter(argv[2], argv[3]))
         return 0
-    if cmd == "__back":
-        print(on_back())
-        return 0
-    if cmd == "__scope":
-        print(on_scope())
-        return 0
-    if cmd == "__all":
-        print(on_all_issues())
+    if cmd == "__right":
+        print(on_right(argv[2], argv[3]))
         return 0
     if cmd == "__url":
         print(url_for(argv[2], argv[3]))
@@ -473,8 +852,8 @@ def main(argv):
     if cmd == "__branch":
         print(branch_for(argv[2], argv[3]))
         return 0
-    if cmd == "__open":
-        return open_issue(argv[2])
+    if cmd == "__go":
+        return go_project(argv[3]) if argv[2] == "P" else go_issue(argv[3])
     if cmd == "__bg":
         bg_refresh(force="--force" in argv)
         return 0

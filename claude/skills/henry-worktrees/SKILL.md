@@ -74,9 +74,15 @@ Claude Code locks a worktree while a session is using it, so `locked` usually me
 
 When asked to clean up: run `wt gc --dry-run`, show the result, then `wt gc -y` once Lawrence agrees. Only use `--all`/`--force` when he asks for them by name.
 
-## Starting work from Linear — `linav` (cmd+l) and `wt open`
+## Starting work from Linear — `linav` (cmd+l)
 
-Ghostty cmd+l → tmux prefix+O → `linav` in a popup: Lawrence's projects (the "Led by Lawrence" view), ctrl-a for everyone's, enter for a project's issues, enter on an issue to check its branch out. That runs `wt open <branch> [pr#]`: it jumps to the worktree already on the branch, otherwise puts the branch in the first idle slot (`gh pr checkout` when a PR exists, else tracks `origin/<branch>`, else creates it from `origin/dev`), runs `bun install`, and opens the slot's session. A new branch in a slot has no PR yet — open a draft PR to satisfy the slot rule. Data comes from the Linear API (key in the Keychain, service `linear-api-key`), cached in `~/.cache/linav`.
+Ghostty cmd+l → tmux prefix+O → `linav`. **A slot holds one Linear project; the branch inside it is one of the project's issues.**
+
+- Enter on a project: jump to its slot, or claim the first idle slot, tag it with the project and put it on the top branch of the project's most recent stack (`.git/gh-stack` order, else the open PRs' base→head chain); `origin/dev` if the project has no branches yet. The tmux session is named `<glyph> <project name>`.
+- Tab/→ on a project lists its issues; Enter on an issue switches the project's slot to that issue's branch. It never switches a slot with uncommitted changes.
+- The tag is a file in the slot's git dir (`.git/worktrees/<slot>/linav-project`), not in the repo. A slot already on one of a project's branches is adopted on first use.
+- Tagged slots free themselves when the picker opens: no open PR left in the project, the branch's PR merged/closed, clean, no Claude running → detached at `origin/dev`, tag removed, idle session closed. Log: `~/.cache/linav/free.log`; preview with `linav free --dry-run`.
+- When Claude starts project work in a slot by hand, tag it the same way so the picker knows the slot is taken.
 
 ## The `wt` picker (cmd+t)
 
