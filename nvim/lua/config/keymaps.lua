@@ -48,3 +48,4 @@ map("n", "<D-/>", "<CMD>normal gcc<CR>", opts)
 
 -- Improved yank
 map("n", "<leader>y", "^vg_y", opts)
+require("config.outbox")

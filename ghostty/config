@@ -78,6 +78,11 @@ keybind = cmd+-=text:\x06-
 # cmd+n to open window
 keybind = cmd+n=text:\x06c
 
+# cmd+e to open the outbox, cmd+enter to save + send it to the Claude pane
+# (replaces Ghostty's search_selection / toggle_fullscreen defaults)
+keybind = cmd+e=text:\x06e
+keybind = cmd+enter=text:\x06\r
+
 # Tmux Window Navigation
 keybind = cmd+left=text:\x06p
 keybind = cmd+right=text:\x06n

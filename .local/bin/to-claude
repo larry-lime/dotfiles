@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# to-claude: paste stdin into a Claude Code pane and submit it.
+#
+#   echo "hello" | to-claude            # Claude pane in the caller's tmux window
+#   to-claude --pane %25 < prompt.md     # a specific pane
+#   to-claude --no-submit < prompt.md    # paste without pressing Enter
+#
+# The target is the first other pane in the caller's window whose tty is
+# running `claude`. Exits non-zero (with a message on stderr) if none exists.
+set -euo pipefail
+
+pane="" submit=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pane) pane="$2"; shift 2 ;;
+    --no-submit) submit=0; shift ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "to-claude: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "${TMUX:-}" ] || { echo "to-claude: not inside tmux" >&2; exit 1; }
+
+is_claude_tty() { ps -o comm= -t "${1#/dev/}" 2>/dev/null | grep -qE '(^|/)claude$'; }
+
+if [ -z "$pane" ]; then
+  self="${TMUX_PANE:-$(tmux display -p '#{pane_id}')}"
+  while read -r id tty; do
+    [ "$id" = "$self" ] && continue
+    if is_claude_tty "$tty"; then pane="$id"; break; fi
+  done < <(tmux list-panes -t "$self" -F '#{pane_id} #{pane_tty}')
+fi
+[ -n "$pane" ] || { echo "to-claude: no Claude pane in this tmux window" >&2; exit 1; }
+
+text="$(cat)"
+[ -n "${text//[[:space:]]/}" ] || { echo "to-claude: nothing to send" >&2; exit 1; }
+
+buf="to-claude-$$"
+printf '%s' "$text" | tmux load-buffer -b "$buf" -
+tmux paste-buffer -p -d -b "$buf" -t "$pane" # -p: bracketed paste, so newlines don't submit early
+if [ "$submit" = 1 ]; then
+  sleep 0.3 # let Claude Code finish ingesting the paste before Enter
+  tmux send-keys -t "$pane" Enter
+fi
+echo "$pane"

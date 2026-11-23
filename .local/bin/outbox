@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# outbox: one markdown file you write in nvim and send to the Claude pane.
+#
+#   outbox open   open the compose file (in the current nvim, or a new split)
+#   outbox send   save the current nvim (ctrl+s), send the compose file to the
+#                 Claude pane in this tmux window, archive it, reset it
+#
+# Bound in tmux to prefix+e / prefix+Enter, which Ghostty sends for cmd+e /
+# cmd+enter. Optional frontmatter routes the message through Claude:
+#
+#   ---
+#   to: reply in Nano's thread in #pylon-henrylabs
+#   ---
+#   Hey Nano, ...
+#
+# Without `to:` the body is a plain prompt. Sent copies: $dir/sent/.
+set -euo pipefail
+
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/nvim/outbox"
+file="$dir/compose.md"
+template=$'---\nto: \n---\n\n'
+
+msg() { tmux display-message -d 3000 "$*"; }
+pane="$(tmux display -p '#{pane_id}')"
+pane_runs_nvim() {
+  local tty; tty="$(tmux display -p -t "$pane" '#{pane_tty}')"
+  ps -o comm= -t "${tty#/dev/}" 2>/dev/null | grep -qE '(^|/)n?vim$'
+}
+ensure_file() { mkdir -p "$dir/sent"; [ -s "$file" ] || printf '%s' "$template" > "$file"; }
+
+cmd_open() {
+  ensure_file
+  if pane_runs_nvim; then
+    tmux send-keys -t "$pane" Escape; sleep 0.05
+    tmux send-keys -t "$pane" ":edit $file | 2 | normal! \$" Enter
+  else
+    tmux split-window -v -l 35% -c "$dir" "nvim '+2' '+normal! \$' '$file'"
+  fi
+}
+
+cmd_send() {
+  ensure_file
+  if pane_runs_nvim; then
+    tmux send-keys -t "$pane" Escape; sleep 0.05 # separate, or nvim reads Esc+^S as Alt-^S
+    tmux send-keys -t "$pane" C-s # your nvim save mapping (normal mode)
+    sleep 0.3
+  fi
+
+  local to body text
+  to="$(awk 'NR==1 && $0!="---" {exit} NR>1 && $0=="---" {exit}
+             NR>1 && /^to:/ {sub(/^to:[ \t]*/, ""); sub(/[ \t]+$/, ""); print}' "$file")"
+  body="$(awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="---" {fm=0; next} !fm' "$file")"
+  body="$(printf '%s' "$body" | sed -e '/./,$!d')" # drop leading blank lines
+  if [ -z "${body//[[:space:]]/}" ]; then msg "Outbox: nothing to send"; exit 0; fi
+
+  if [ -n "$to" ]; then
+    text="Send the message between the markers to: $to
+Use the text verbatim (keep its markdown); look up whatever channel, thread or person you need.
+
+<<<MESSAGE
+$body
+MESSAGE>>>"
+  else
+    text="$body"
+  fi
+
+  local err
+  if ! err="$(printf '%s' "$text" | TMUX_PANE="$pane" "$(dirname "$0")/to-claude" 2>&1 >/dev/null)"; then
+    msg "Outbox: ${err#to-claude: }"; exit 1
+  fi
+  cp "$file" "$dir/sent/$(date +%Y%m%d-%H%M%S).md"
+  printf '%s' "$template" > "$file" # nvim reloads it (config/outbox.lua)
+  msg "Outbox → Claude${to:+ → $to}"
+}
+
+case "${1:-}" in
+  open) cmd_open ;;
+  send) cmd_send ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
