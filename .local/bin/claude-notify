@@ -23,7 +23,8 @@ case "$1" in
   [ -n "$TMUX_PANE" ] || exit 0
   tmux set-option -w -t "$TMUX_PANE" @claude_working "$(date +%s)" \; \
     set-option -uw -t "$TMUX_PANE" @claude_attention \; \
-    set-option -uw -t "$TMUX_PANE" @claude_done 2>/dev/null
+    set-option -uw -t "$TMUX_PANE" @claude_done \; \
+    set-option -uw -t "$TMUX_PANE" @unread 2>/dev/null # Claude's state overrides a cmd+u mark
   # Remember the folders this window's Claude session works in (most recent
   # first, '|'-separated, max 8). gnav (cmd+g) maps them to branches/stacks.
   cwd=$(jq -r '.cwd // empty' 2>/dev/null)
@@ -62,7 +63,8 @@ if [ -n "$TMUX_PANE" ] && command -v tmux >/dev/null 2>&1; then
   focused=$(tmux display-message -p -t "$TMUX_PANE" '#{window_active}#{session_attached}' 2>/dev/null)
   location=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I #W' 2>/dev/null)
 
-  tmux set-option -uw -t "$TMUX_PANE" @claude_working 2>/dev/null
+  # Claude's new state overrides a manual unread mark (prefix+u / cmd+u).
+  tmux set-option -uw -t "$TMUX_PANE" @claude_working \; set-option -uw -t "$TMUX_PANE" @unread 2>/dev/null
   if [ "$mode" = attention ]; then
     # Set even when on screen: it stays until Claude actually resumes.
     tmux set-option -w -t "$TMUX_PANE" @claude_attention "$(date +%s)" 2>/dev/null

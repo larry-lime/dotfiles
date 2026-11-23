@@ -76,6 +76,9 @@ tag() {
 # plus a second green ● for windows marked unread (prefix+u / cmd+u)
 # (same dots as the tmux status bar)
 tmux_entries() {
+  # Windows first, ranked by `linav __windows`: red > green/unread > idle > yellow,
+  # then the Linear project's priority, then oldest first.
+  linav __windows 2>/dev/null
   tmux list-windows -a -F $'#{session_name}\t#{window_index}\t#{window_name}\t#{@claude_attention}\t#{?#{&&:#{window_active},#{session_attached}},,#{@claude_done}}\t#{@claude_working}\t#{@unread}' 2>/dev/null |
     HIDDEN="${(pj:\n:)HIDDEN_SESSIONS}" awk -F'\t' '
       function rank(s) {
@@ -95,7 +98,6 @@ tmux_entries() {
         if ($5 != "") done[$1] = 1
         if ($6 != "") work[$1] = 1
         if ($7 != "") unr[$1] = 1
-        printf "%d\t1\t%06d\t%s:%s:%s\t🪟 %s › %s%s\n", rank($1), NR, $1, $2, $3, $1, $3, status($4 != "", $6 != "", $5 != "") unread($7 != "")
       }
       END {
         for (i = 1; i <= ns; i++) {

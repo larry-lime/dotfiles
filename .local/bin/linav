@@ -234,6 +234,90 @@ def claude_dots():
     return {p: f"{colour[r]}●{R}" for p, r in rank.items() if r}
 
 
+ESCALATE_SECS = 2 * 3600  # green waiting longer than this counts one priority level higher
+PRIO_LEVEL = {1: 0, 2: 1, 3: 2, 0: 2, 4: 3}  # urgent, high, medium (= none / no project), low
+PRIO_SHORT = {0: f"{RED}!!!{R}", 1: "▮▮▮", 2: "▮▮▯", 3: "▮▯▯"}
+
+
+def ago(secs):
+    secs = max(0, int(secs))
+    return f"{secs // 60}m" if secs < 3600 else f"{secs // 3600}h" if secs < 86400 else f"{secs // 86400}d"
+
+
+def windows_ranked():
+    """tmux windows for tnav (cmd+k), ranked so the top row is what to do next.
+
+    1. what the window needs from you: red (Claude blocked) > green (done or
+       marked unread) > idle > yellow (Claude busy)
+    2. the Linear PROJECT's priority (only project priority counts): via the
+       slot's project tag, else the branch's issue → its project; no project or
+       no priority = medium. Green waiting > 2h counts one level higher.
+    3. oldest first
+    Lines are "<session:index:name>\\t<display>", like tnav's own rows.
+    """
+    data = load() or {"projects": [], "issues": []}
+    proj_prio = {p["id"]: p["priority"] for p in data["projects"]}
+    proj_name = {p["id"]: p["name"] for p in data["projects"]}
+    issue_proj = {i["identifier"]: (i.get("project") or {}).get("id") for i in data["issues"]}
+    # worktree path → branch (longest path wins when nested)
+    out = git(REPO, "worktree", "list", "--porcelain").stdout
+    wts, path = [], None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            path = line[9:]
+            wts.append([path, ""])
+        elif line.startswith("branch refs/heads/") and wts:
+            wts[-1][1] = line[18:]
+    wts.sort(key=lambda w: -len(w[0]))
+    tag_cache = {}
+
+    def project_for(p):
+        for wt, branch in wts:
+            if p == wt or p.startswith(wt + "/"):
+                if wt not in tag_cache:
+                    tag_cache[wt] = read_tag(wt)
+                tag = tag_cache[wt]
+                if tag and not tag["id"].startswith("issue:"):
+                    return tag["id"]
+                m = ISSUE_KEY.search(branch)
+                return issue_proj.get(m.group(1).upper()) if m else None
+        return None
+
+    fmt = "\t".join(["#{session_name}", "#{window_index}", "#{window_name}", "#{pane_current_path}",
+                     "#{@claude_attention}", "#{@claude_working}",
+                     "#{?#{&&:#{window_active},#{session_attached}},,#{@claude_done}}", "#{@unread}"])
+    out = subprocess.run(["tmux", "list-windows", "-a", "-F", fmt], capture_output=True, text=True).stdout
+    now, rows = time.time(), []
+    for line in out.splitlines():
+        f = (line.split("\t") + [""] * 8)[:8]
+        sess, idx, name, p, att, work, done, unread = f
+        # Epoch seconds; anything else (e.g. an old "1" unread mark) counts as now.
+        ts = lambda v: float(v) if v.replace(".", "", 1).isdigit() and float(v) > 1e9 else now
+        if att:
+            tier, since, dot = 0, ts(att), f"{RED}●{R}"
+        elif done or unread:
+            tier, since = 1, min(ts(v) for v in (done, unread) if v)
+            dot = f"{GRN}●{R}"
+        elif work:
+            tier, since, dot = 3, now, f"{YEL}●{R}"
+        else:
+            tier, since, dot = 2, now, ""
+        if unread and (att or work):
+            dot += f"{GRN}●{R}"
+        pid = project_for(p)
+        level = PRIO_LEVEL.get(proj_prio.get(pid, 0), 2)
+        if tier == 1 and now - since > ESCALATE_SECS:
+            level = max(0, level - 1)
+        why = ""
+        if tier in (0, 1):
+            why = f" {DIM}{PRIO_SHORT[level]} {ago(now - since)}{R}"
+            if pid in proj_name:
+                why += f" {DIM}{fit(proj_name[pid], 28).rstrip()}{R}"
+        rows.append(((tier, level, since), f"{sess}:{idx}:{name}\t🪟 {sess} › {name}{' ' + dot if dot else ''}{why}"))
+    rows.sort(key=lambda r: r[0])
+    return [r[1] for r in rows]
+
+
 def claude_running_in(path):
     out = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_current_command}\t#{pane_current_path}"],
                          capture_output=True, text=True).stdout
@@ -833,6 +917,9 @@ def main(argv):
         return 0
     if cmd == "free":
         auto_free(load() or fetch(), dry="--dry-run" in argv)
+        return 0
+    if cmd == "__windows":
+        sys.stdout.write("\n".join(windows_ranked()) + "\n")
         return 0
     if cmd == "__list":
         sys.stdout.write("\n".join(list_rows()) + "\n")
