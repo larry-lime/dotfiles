@@ -34,6 +34,9 @@ PR_CACHE=$CACHE_DIR/prs.tsv
 PR_TTL=300 # seconds before the picker refreshes open PRs in the background
 SELF=${0:A}
 
+# Colours only when writing to a terminal (not in pipes or Claude's `!` shell).
+if [[ -t 1 ]]; then R=$'\e[31m' G=$'\e[32m' Y=$'\e[33m' N=$'\e[0m'; else R='' G='' Y='' N=''; fi
+
 usage() { sed -n '2,25p' "$SELF" | sed 's/^# \{0,1\}//' }
 
 # ---------------------------------------------------------------- classification
@@ -236,14 +239,14 @@ cmd_gc() {
     [[ $(kind_of "$p") == temp && -d $p ]] || continue
     assess "$p" "$b" "$l"
     if (( ${#HARD} )); then
-      printf '  \e[32mkeep\e[0m    %-34s %s\n' "${p:t}" "${(j:, :)HARD}"
+      printf '  %skeep%s    %-34s %s\n' "$G" "$N" "${p:t}" "${(j:, :)HARD}"
     elif (( ${#KEEP} && !all )); then
-      printf '  \e[32mkeep\e[0m    %-34s %s\n' "${p:t}" "${(j:, :)KEEP}"
+      printf '  %skeep%s    %-34s %s\n' "$G" "$N" "${p:t}" "${(j:, :)KEEP}"
     elif (( ${#SOFT} && !force )); then
-      printf '  \e[33mkeep\e[0m    %-34s %s (use --force)\n' "${p:t}" "${(j:, :)SOFT}"
+      printf '  %skeep%s    %-34s %s (use --force)\n' "$Y" "$N" "${p:t}" "${(j:, :)SOFT}"
     else
       reasons=("${SOFT[@]}" "${KEEP[@]}"); (( ${#reasons} )) || reasons=(clean)
-      printf '  \e[31mremove\e[0m  %-34s %s\n' "${p:t}" "${(j:, :)reasons}"
+      printf '  %sremove%s  %-34s %s\n' "$R" "$N" "${p:t}" "${(j:, :)reasons}"
       rm_paths+=("$p"); rm_branches+=("$b"); rm_force+=($(( ${#SOFT} > 0 )))
     fi
   done < <(worktrees "$repo")
@@ -251,6 +254,10 @@ cmd_gc() {
   if (( ! ${#rm_paths} )); then print "Nothing to remove."; return 0; fi
   if (( dry )); then print "Dry run: nothing removed."; return 0; fi
   if (( ! yes )); then
+    if [[ ! -t 0 ]]; then
+      print "No terminal to confirm in. Re-run as \`wt gc -y\` to remove these ${#rm_paths}."
+      return 1
+    fi
     read -q "?Remove ${#rm_paths} worktree(s)? Branches are kept. [y/N] " || { print; return 1 }
     print
   fi
