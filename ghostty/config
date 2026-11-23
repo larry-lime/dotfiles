@@ -57,6 +57,8 @@ keybind = ctrl+tab=text:\x06l
 keybind = cmd+k=text:\x06F
 keybind = cmd+t=text:\x06W
 keybind = cmd+l=text:\x06O
+# cmd+u: mark the current tmux window unread/read (green dot)
+keybind = cmd+u=text:\x06u
 # cmd+i pynav: Pylon support inbox
 keybind = cmd+i=text:\x06H
 
