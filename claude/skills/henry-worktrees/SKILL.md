@@ -65,8 +65,8 @@ The branch stays local; nothing is lost. **Never** `reset --hard`, `clean -fdx`,
 | --- | --- | --- |
 | clean, nothing unpushed, no open PR | **removed** | — |
 | branch has an open PR | kept | `--all` removes |
-| uncommitted changes / unpushed commits / locked | kept | `--force` removes |
-| open in a tmux pane, or your current dir | kept | never removed |
+| uncommitted changes / unpushed commits / locked / git activity in the last 2h | kept | `--force` removes |
+| open in a tmux pane, a running process's cwd, or your current dir | kept | never removed |
 
 It refreshes open PRs from GitHub first, asks before removing (`-y` skips), kills tmux sessions rooted there, and runs `git worktree prune`. Branches are kept, except leftover `worktree-*` branches with nothing unpushed. `--dry-run` / `-n` shows the plan only.
 

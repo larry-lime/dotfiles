@@ -9,8 +9,9 @@
 #       -n, --dry-run    show what would happen, change nothing
 #       -y, --yes        don't ask for confirmation
 #       --all            also remove temp worktrees whose branch has an open PR
-#       --force          also remove ones with uncommitted/unpushed work or a lock
-#                        (never one that's open in a tmux pane or your current dir)
+#       --force          also remove ones with uncommitted/unpushed work, a lock, or
+#                        git activity in the last 2h (WT_ACTIVE_SECS); never one that's
+#                        open in a tmux pane, a process's cwd, or your current dir
 #   wt rm <path>       remove one temp worktree (asks first if it holds unsaved work)
 #   wt ls              print the classified list without fzf
 #
@@ -32,6 +33,7 @@ BASES=(dev main staging)
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/wt
 PR_CACHE=$CACHE_DIR/prs.tsv
 PR_TTL=300 # seconds before the picker refreshes open PRs in the background
+ACTIVE_SECS=${WT_ACTIVE_SECS:-7200} # HEAD/index touched this recently = someone may be working there
 SELF=${0:A}
 
 # Colours only when writing to a terminal (not in pipes or Claude's `!` shell).
@@ -182,15 +184,27 @@ open_session() { # path
 
 # ---------------------------------------------------------------- safety checks
 
+# Working directories of every running process (one lsof call, reused by assess).
+PROC_CWDS=""
+load_proc_cwds() { PROC_CWDS=$(lsof -a -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | sort -u) }
+
 # Fills HARD (never remove), SOFT (remove only with --force) and KEEP (open PR).
 assess() { # path branch lock
-  local p=$1 b=$2 l=$3 n
+  local p=$1 b=$2 l=$3 n gd newest age
   HARD=() SOFT=() KEEP=()
   [[ $PWD == $p || $PWD == $p/* ]] && HARD+=("your current directory")
   tmux list-panes -a -F '#{pane_current_path}' 2>/dev/null |
     awk -v p="$p" '$0 == p || index($0, p "/") == 1 { f = 1 } END { exit !f }' &&
     HARD+=("open in a tmux pane")
+  print -r -- "$PROC_CWDS" | awk -v p="$p" '$0 == p || index($0, p "/") == 1 { f = 1 } END { exit !f }' &&
+    HARD+=("a process is running in it")
   [[ $l == locked ]] && SOFT+=("locked")
+  gd=$(git -C "$p" rev-parse --absolute-git-dir 2>/dev/null)
+  if [[ -n $gd ]]; then
+    newest=$(stat -f %m "$gd/HEAD" "$gd/index" "$gd/logs/HEAD" 2>/dev/null | sort -n | tail -1)
+    age=$(( $(date +%s) - ${newest:-0} ))
+    (( age < ACTIVE_SECS )) && SOFT+=("active $(( age / 60 ))m ago")
+  fi
   [[ -n $(git -C "$p" status --porcelain 2>/dev/null | head -1) ]] && SOFT+=("uncommitted changes")
   n=$(git -C "$p" rev-list --count HEAD --not --remotes 2>/dev/null)
   (( n > 0 )) && SOFT+=("$n unpushed commit(s)")
@@ -232,6 +246,7 @@ cmd_gc() {
   refresh_prs "$repo" || print -u2 "  ! couldn't reach GitHub; using the cached PR list"
   load_prs
   git -C "$repo" worktree prune
+  load_proc_cwds
 
   local -a rm_paths rm_branches rm_force reasons
   print "==> temp worktrees"
@@ -276,7 +291,7 @@ cmd_rm() {
     print "wt: ${p:t} is a $(kind_of "$p") worktree. wt only deletes temp worktrees."
     sleep 1.5; return 1
   fi
-  load_prs
+  load_prs; load_proc_cwds
   assess "$p" "$b" "$l"
   if (( ${#HARD} )); then print "wt: not removing ${p:t}: ${(j:, :)HARD}"; sleep 1.5; return 1; fi
   reasons=("${SOFT[@]}" "${KEEP[@]}")
