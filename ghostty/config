@@ -64,6 +64,8 @@ keybind = cmd+i=text:\x06H
 
 # cmd+g: gnav GitHub stack picker for the current window (lazygit stays on tmux prefix+G)
 keybind = cmd+g=text:\x06B
+# cmd+shift+g: ship dev → main (gnav promote)
+keybind = cmd+shift+g=text:\x06N
 
 # cmd+d to open lazydocker
 keybind = cmd+d=text:\x06D

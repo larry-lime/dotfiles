@@ -6,6 +6,13 @@ worked in (recorded by `claude-notify --working` in @claude_cwds) plus the
 window's pane folders → worktree → branch → gh-stack stack (or a lone PR).
 
 Each PR row: draft/ready, review state, CI, needs-rebase / queued / merged.
+The top row is always the Dev ➙ Main promotion PR (alt-m on it ships dev to main).
+
+  gnav promote   (Ghostty cmd+shift+g → tmux prefix+N) ship dev → main directly:
+                 lists the commits going out, then one y approves the bot's PR and
+                 merges it (merge commit), or turns on auto-merge while checks run.
+                 f force-merges now without waiting for checks (running or failing;
+                 asks you to type "force"). Approval is always given first.
 Opens instantly from ~/.cache/gnav and refreshes from GitHub in the background.
 
 Keys
@@ -14,13 +21,14 @@ Keys
   ctrl-r   mark ready for review (header: every draft PR in the stack)
   ctrl-s   gh stack sync   (fetch, cascade-rebase, push --force-with-lease)
   ctrl-b   gh stack rebase (local only; push afterwards with ctrl-s)
-  alt-m    merge: a stack → `gh stack merge` wizard; a lone PR → merge,
+  alt-m    on ⇡ Dev ➙ Main: promote (above). Otherwise merge: a stack → `gh stack merge` wizard; a lone PR → merge,
            auto-merge when checks pass, or force (--admin, skips checks)
   ctrl-l   refresh from GitHub now
 Every write asks first, and warns when Claude is still working in that window.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -33,6 +41,11 @@ PR_CACHE = os.path.join(CACHE_DIR, "prs.json")
 SELF = os.path.realpath(__file__)
 TTL = 30
 TRUNKS = {"main", "master", "dev", "develop", "staging", "trunk"}
+# Dev ➙ Main promotion (opened by .github/workflows/repo-promote.yml on every push to dev)
+PROMO_REPO = "Henry-Social/henry"
+PROMO_DIR = os.path.expanduser("~/HenryLabs/henry/dev")
+CHECK_OK = {"SUCCESS", "SKIPPED", "NEUTRAL"}
+CHECK_FAIL = {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
 GREEK = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega".split()
 GLYPH = "αβγδεζηθικλμνξοπρστυφχψω"
 
@@ -128,8 +141,37 @@ PR_FIELDS = """number title url isDraft state reviewDecision mergeStateStatus he
   commits(last:1){nodes{commit{statusCheckRollup{state}}}}"""
 
 
+def promo_status():
+    """The open Dev ➙ Main PR: approval, checks, merge state. Or how far dev is ahead when there's none."""
+    out = sh(["gh", "pr", "list", "--repo", PROMO_REPO, "--base", "main", "--head", "dev", "--state", "open",
+              "--json", "number,url,reviewDecision,mergeStateStatus,statusCheckRollup,commits,autoMergeRequest"])
+    try:
+        prs = json.loads(out or "[]")
+    except ValueError:
+        return None
+    if not prs:
+        ahead = sh(["gh", "api", f"repos/{PROMO_REPO}/compare/main...dev", "--jq", ".ahead_by"])
+        return {"number": None, "ahead": int(ahead) if ahead.isdigit() else 0}
+    p = prs[0]
+    ok = fail = pending = 0
+    failed = []
+    for c in p.get("statusCheckRollup") or []:
+        st = (c.get("conclusion") or c.get("state") or "").upper()
+        if st in CHECK_OK:
+            ok += 1
+        elif st in CHECK_FAIL:
+            fail += 1
+            failed.append(c.get("name") or c.get("context") or "?")
+        else:
+            pending += 1
+    return {"number": p["number"], "url": p["url"], "review": p.get("reviewDecision") or "",
+            "state": p.get("mergeStateStatus") or "", "commits": len(p.get("commits") or []),
+            "ok": ok, "fail": fail, "pending": pending, "failed": failed,
+            "auto": bool(p.get("autoMergeRequest"))}
+
+
 def fetch_status(groups):
-    """Refresh PR status (GraphQL, one call per repo) and gh-stack rebase state."""
+    """Refresh PR status (GraphQL, one call per repo), gh-stack rebase state and Dev ➙ Main."""
     cache = read_json(PR_CACHE, {})
     by_repo = {}
     for g in groups:
@@ -168,6 +210,7 @@ def fetch_status(groups):
     with ThreadPoolExecutor(8) as pool:
         repo_jobs = [pool.submit(one_repo, s, items) for s, items in by_repo.items()]
         stack_jobs = [pool.submit(one_stack, g) for g in groups if g["stack"]]
+        promo_job = pool.submit(promo_status)
         for j in repo_jobs:
             try:
                 cache.update(j.result())
@@ -178,6 +221,9 @@ def fetch_status(groups):
             wt, branches = j.result()
             if branches:
                 stacks[wt] = branches
+        promo = promo_job.result()
+        if promo is not None:
+            cache["_promo"] = promo
     cache["_fetched"] = time.time()
     write_json(PR_CACHE, cache)
 
@@ -223,11 +269,31 @@ def fit(text, width):
     return text[:width - 1] + "…" if len(text) > width else text.ljust(width)
 
 
+def promo_summary(s):
+    """one coloured line for the Dev ➙ Main status"""
+    if not s:
+        return f"{DIM}…{R}"
+    if not s.get("number"):
+        return f"{DIM}main is up to date{R}" if not s.get("ahead") else \
+               f"{YEL}dev is {s['ahead']} ahead, no PR yet{R}"
+    bits = [f"{GRN}#{s['number']}{R}", f"{DIM}{s['commits']} commits{R}"]
+    bits.append(f"{GRN}✓ approved{R}" if s["review"] == "APPROVED" else f"{YEL}◷ needs approval{R}")
+    bits.append(f"{RED}CI ✗ {s['fail']}{R}" if s["fail"] else f"{YEL}CI … {s['pending']}{R}" if s["pending"]
+                else f"{GRN}CI ✓{R}")
+    if s["state"] == "DIRTY":
+        bits.append(f"{RED}conflicts{R}")
+    if s.get("auto"):
+        bits.append(f"{MAG}auto-merge on{R}")
+    return " · ".join(bits)
+
+
 def rows_for(window):
     groups = groups_for(window)
     cache = read_json(PR_CACHE, {})
     dot = {"attention": f" {RED}●{R}", "working": f" {YEL}●{R}"}.get(claude_state(window), "")
-    rows = []
+    promo = cache.get("_promo") or {}
+    rows = [f"M\t{promo.get('number') or ''}\t{PROMO_DIR}\tdev\t{BOLD}⇡ Dev ➙ Main{R}  {promo_summary(promo)}"
+            f"  {DIM}(alt-m ships){R}"]
     for g in groups:
         slug, wt = repo_slug(g), g["worktree"]
         local = cache.get("_stacks", {}).get(wt, {})
@@ -256,7 +322,7 @@ def rows_for(window):
                         f"{fit(name, 54)} {status}")
         if g["stack"]:
             rows.append(f"T\t\t{wt}\t\t  {DIM}└ {g['trunk'] or 'trunk'}{R}")
-    if not rows:
+    if len(rows) == 1:
         rows.append(f"T\t\t\t\t{DIM}No git branch in this window (no Claude folders recorded and no pane in a repo).{R}")
     return rows
 
@@ -273,8 +339,105 @@ def pause():
     input(f"\n{DIM}enter to go back{R} ")
 
 
+def outgoing():
+    """What a promotion ships: one line per change on dev's first-parent history
+    (a merged PR shows as its number and title), as [(ref, author, title)]."""
+    if subprocess.run(["git", "-C", PROMO_DIR, "fetch", "-q", "origin", "dev", "main"]).returncode:
+        return []
+    out = sh(["git", "-C", PROMO_DIR, "log", "--first-parent", "--reverse",
+              "--format=%h%x1f%an%x1f%s%x1f%b%x1e", "origin/main..origin/dev"])
+    rows = []
+    for rec in out.split("\x1e"):
+        parts = rec.strip("\n").split("\x1f")
+        if len(parts) < 4:
+            continue
+        sha, who, subject, body = parts
+        m = re.match(r"Merge pull request #(\d+) from \S+", subject)
+        if m:
+            title = next((ln.strip() for ln in body.splitlines() if ln.strip()), subject)
+            rows.append((f"#{m.group(1)}", who.split()[0], title))
+        else:
+            m = re.search(r"\(#(\d+)\)$", subject)
+            rows.append((f"#{m.group(1)}" if m else sha, who.split()[0], re.sub(r"\s*\(#\d+\)$", "", subject)))
+    return rows
+
+
+def promote():
+    """Ship dev to main: show what's going out, then approve + merge (or auto-merge) on one confirm."""
+    os.system("clear")
+    print(f"{BOLD}⇡ Dev ➙ Main{R}  {DIM}checking GitHub…{R}", flush=True)
+    s = promo_status()
+    if s is None:
+        print(f"{RED}Couldn't reach GitHub (gh pr list failed).{R}")
+        return pause()
+    if not s["number"]:
+        if not s["ahead"]:
+            print(f"\n{GRN}main is already up to date with dev.{R}")
+            return pause()
+        print(f"\ndev is {s['ahead']} commit(s) ahead of main but there's no promotion PR yet "
+              f"(the Auto Promote workflow may still be running).")
+        if input("Run the promote workflow now? [y/N] ").strip().lower() in ("y", "yes"):
+            subprocess.run(["gh", "workflow", "run", "repo-promote.yml", "--repo", PROMO_REPO])
+            print("Started. The PR shows up in a minute; run this again then.")
+        return pause()
+
+    n = str(s["number"])
+    lines = outgoing()
+    os.system("clear")
+    print(f"{BOLD}⇡ Dev ➙ Main{R}  {promo_summary(s)}\n{DIM}{s['url']}{R}\n")
+    print(f"{DIM}{len(lines)} change(s) going out:{R}")
+    shown = lines[-30:]
+    if len(lines) > len(shown):
+        print(f"{DIM}  … {len(lines) - len(shown)} earlier{R}")
+    for ref, who, title in shown:
+        print(f"  {GRN}{fit(ref, 7)}{R} {DIM}{fit(who, 10)}{R} {fit(title, 95)}")
+    print()
+
+    if s["auto"]:
+        print(f"{MAG}Auto-merge is already on; it merges when checks pass.{R}")
+        return pause()
+    if s["state"] == "DIRTY":
+        print(f"{RED}dev and main conflict. Resolve that first (open the PR).{R}")
+        return pause()
+    approve = s["review"] != "APPROVED"
+    steps = (["approve"] if approve else [])
+    base = ["gh", "pr", "merge", n, "--merge", "--repo", PROMO_REPO]
+    force = base + ["--admin"]  # you can bypass the required-checks ruleset; approval still applies
+    if s["fail"]:
+        print(f"{RED}Failing checks:{R} {', '.join(s['failed'][:8])}")
+        merge, label = None, ""
+    elif s["pending"]:
+        merge, label = base + ["--auto"], f"turn on auto-merge ({s['pending']} checks still running)"
+    else:
+        merge, label = base, "merge now (merge commit)"
+    options = ([f"{BOLD}y{R} {label}"] if merge else []) + \
+              ([f"{BOLD}f{R} force-merge now, skip checks"] if s["fail"] or s["pending"] else [])
+    pre = "approve → " if approve else ""
+    choice = input(f"Ship it ({pre}…): {'   '.join(options)}   {DIM}anything else cancels{R}\n> ").strip().lower()
+    if choice in ("y", "yes") and merge:
+        steps.append(label)
+    elif choice == "f" and (s["fail"] or s["pending"]):
+        if input(f"Type {BOLD}force{R} to merge #{n} now without waiting for checks: ").strip() != "force":
+            print("Cancelled.")
+            return pause()
+        merge = force
+        steps.append("force-merge (checks skipped)")
+    else:
+        return
+    if approve and subprocess.run(["gh", "pr", "review", n, "--approve", "--repo", PROMO_REPO]).returncode:
+        print(f"{RED}Approval failed; not merging.{R}")
+        return pause()
+    if subprocess.run(merge).returncode == 0:
+        print(f"\n{GRN}✓ Dev ➙ Main #{n}: {steps[-1]}.{R}")
+        time.sleep(1.5)
+    else:
+        pause()
+
+
 def act(action, window, kind, num, wt, branch):
     os.system("clear")
+    if action == "merge" and kind == "M":
+        return promote()
     if action == "ready":
         groups = [g for g in groups_for(window) if g["worktree"] == wt]
         cache = read_json(PR_CACHE, {})
@@ -354,7 +517,7 @@ def pick(window):
     cmd = ["fzf", "--ansi", "--reverse", "--no-sort", "--exact", "--prompt", "🔎 ",
            "--border", "rounded", "--border-label", f" Stacks · {name} ",
            "--delimiter", "\t", "--with-nth", "5..", "--listen",
-           "--footer", "enter PR · ctrl-r ready · ctrl-s sync · ctrl-b rebase · alt-m merge · ctrl-y branch · ctrl-l refresh",
+           "--footer", "enter PR · alt-m merge/ship · ctrl-r ready · ctrl-s sync · ctrl-b rebase · ctrl-y branch · ctrl-l refresh",
            "--bind", f"start:execute-silent({me} __bg {w})",
            "--bind", "enter:execute-silent([ -n {2} ] && cd {3} && gh pr view --web {2})",
            "--bind", "ctrl-y:execute-silent(printf %s {4} | pbcopy)",
@@ -381,6 +544,8 @@ def main(argv):
         bg_refresh(argv[2], force="--force" in argv)
     elif cmd == "__act":
         act(argv[2], argv[3], *(argv[4:8] + [""] * (4 - len(argv[4:8]))))
+    elif cmd == "promote":
+        promote()
     elif cmd == "fetch":
         fetch_status(groups_for(argv[2] if len(argv) > 2 else window))
     else:
