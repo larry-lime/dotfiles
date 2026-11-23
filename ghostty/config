@@ -57,6 +57,8 @@ keybind = ctrl+tab=text:\x06l
 keybind = cmd+k=text:\x06F
 keybind = cmd+t=text:\x06W
 keybind = cmd+l=text:\x06O
+# cmd+i pynav: Pylon support inbox
+keybind = cmd+i=text:\x06H
 
 # cmd+g: snav stack picker for the current window (lazygit stays on tmux prefix+G)
 keybind = cmd+g=text:\x06B

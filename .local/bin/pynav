@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""pynav — Pylon support inbox picker for tmux (Ghostty cmd+i → tmux prefix+H).
+
+Opens instantly from a local cache and refreshes from Pylon in the background
+(the list reloads in place when fresh data lands).
+
+  Open issues, grouped by state (waiting on you first), newest activity first.
+    enter    reply: point the outbox at this issue and open it (cmd+enter sends)
+    ctrl-d   draft with Claude: Claude reads the thread (Pylon MCP) and writes
+             a reply into the outbox for you to edit; nothing is sent
+    ctrl-/   show/hide the thread
+    ctrl-a   everyone's issues / mine
+    ctrl-o   open in Pylon     ctrl-y  copy link     ctrl-r  refresh now
+
+Columns: number, account, title, assignee, time since the last message.
+
+Auth: Pylon API token in the macOS Keychain (service "pylon-api-key"); create
+one as an admin in Pylon › Settings › API tokens, then:
+  security add-generic-password -a "$USER" -s pylon-api-key -w
+EU workspaces: export PYLON_API_BASE=https://api.eu.usepylon.com
+Cache: ~/.cache/pynav/.
+"""
+import calendar
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from html.parser import HTMLParser
+
+API = os.environ.get("PYLON_API_BASE", "https://api.usepylon.com").rstrip("/")
+CACHE_DIR = os.path.expanduser("~/.cache/pynav")
+CACHE = os.path.join(CACHE_DIR, "data.json")
+THREADS = os.path.join(CACHE_DIR, "threads")
+TTL = 60  # seconds before a background refresh
+COMPOSE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+                       "nvim", "outbox", "compose.md")
+BIN = os.path.dirname(os.path.realpath(__file__))
+SELF = os.path.realpath(__file__)
+STATE = os.environ.get("PYNAV_STATE", "")
+
+R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
+RED, YEL, GRN, CYN, MAG = "\033[31m", "\033[33m", "\033[32m", "\033[36m", "\033[35m"
+
+# ---------------------------------------------------------------- Pylon API
+
+def api_key():
+    return subprocess.check_output(
+        ["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", "pylon-api-key", "-w"],
+        text=True, stderr=subprocess.DEVNULL).strip()
+
+
+def call(key, method, path, body=None):
+    req = urllib.request.Request(
+        API + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                 "Accept": "application/json"})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 2:
+                time.sleep(int(e.headers.get("Retry-After") or 5))
+                continue
+            detail = e.read().decode(errors="replace")[:200]
+            raise RuntimeError(f"{method} {path}: HTTP {e.code} {detail}") from None
+
+
+def paged(key, method, path, body=None):
+    out, cursor = [], None
+    while True:
+        if method == "GET":
+            sep = "&" if "?" in path else "?"
+            page = call(key, "GET", path + (f"{sep}cursor={cursor}" if cursor else ""))
+        else:
+            page = call(key, "POST", path, {**(body or {}), **({"cursor": cursor} if cursor else {})})
+        out += page.get("data") or []
+        pag = page.get("pagination") or {}
+        cursor = pag.get("cursor")
+        if not pag.get("has_next_page") or not cursor:
+            return out
+
+
+OPEN_FILTER = {"filter": {"field": "state", "operator": "not_in", "values": ["closed"]}, "limit": 1000}
+
+
+def fetch():
+    key = api_key()
+    with ThreadPoolExecutor(4) as pool:
+        me = pool.submit(call, key, "GET", "/me")
+        issues = pool.submit(paged, key, "POST", "/issues/search", OPEN_FILTER)
+        accounts = pool.submit(paged, key, "GET", "/accounts?limit=999")
+        statuses = pool.submit(call, key, "GET", "/issue-statuses")
+        data = {
+            "fetched": time.time(),
+            "me": ((me.result() or {}).get("data") or {}).get("id"),
+            "issues": issues.result(),
+            "accounts": {a["id"]: a.get("name") or "" for a in accounts.result()},
+            "statuses": {s["slug"]: s.get("label") or s["slug"]
+                         for s in (statuses.result() or {}).get("data") or []},
+        }
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = f"{CACHE}.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, CACHE)
+    return data
+
+
+def load():
+    try:
+        with open(CACHE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def find(data, issue_id):
+    return next((i for i in (data or {}).get("issues", []) if i["id"] == issue_id), None)
+
+# ---------------------------------------------------------------- thread (preview)
+
+class _Text(HTMLParser):
+    BLOCK = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "blockquote", "pre"}
+
+    def __init__(self):
+        super().__init__()
+        self.out = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.BLOCK:
+            self.out.append("\n")
+        if tag == "li":
+            self.out.append("• ")
+
+    def handle_data(self, d):
+        self.out.append(d)
+
+
+def to_text(markup):
+    p = _Text()
+    p.feed(markup or "")
+    text = html.unescape("".join(p.out))
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def ago(ts):
+    if not ts:
+        return ""
+    try:
+        t = calendar.timegm(time.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S"))
+    except ValueError:
+        return ""
+    s = max(0, time.time() - t)
+    for unit, n in (("d", 86400), ("h", 3600), ("m", 60)):
+        if s >= n:
+            return f"{int(s // n)}{unit}"
+    return "now"
+
+
+def thread(issue_id):
+    os.makedirs(THREADS, exist_ok=True)
+    path = os.path.join(THREADS, f"{issue_id}.json")
+    try:
+        if time.time() - os.path.getmtime(path) < TTL:
+            with open(path) as f:
+                return json.load(f)
+    except (OSError, ValueError):
+        pass
+    msgs = paged(api_key(), "GET", f"/issues/{issue_id}/messages")
+    with open(path, "w") as f:
+        json.dump(msgs, f)
+    return msgs
+
+
+def show_thread(issue_id):
+    data = load()
+    issue = find(data, issue_id) or {}
+    acct = (data or {}).get("accounts", {}).get((issue.get("account") or {}).get("id"), "")
+    print(f"{BOLD}#{issue.get('number', '')} {issue.get('title', '')}{R}")
+    print(f"{DIM}{acct} · {issue.get('state', '')} · {issue.get('link', '')}{R}\n")
+    try:
+        msgs = thread(issue_id)
+    except Exception as e:
+        print(f"{RED}{e}{R}")
+        return
+    for m in msgs:
+        who = (m.get("author") or {}).get("name") or "?"
+        note = f" {YEL}[internal note]{R}" if m.get("is_private") else ""
+        print(f"{CYN}{BOLD}{who}{R}{note} {DIM}{ago(m.get('timestamp'))} ago{R}")
+        print(to_text(m.get("message_html")) + "\n")
+
+# ---------------------------------------------------------------- formatting
+
+STATE_ORDER = {"waiting_on_you": 0, "new": 1, "on_hold": 2, "waiting_on_customer": 3}
+STATE_COLOUR = {"waiting_on_you": RED, "new": MAG, "on_hold": DIM, "waiting_on_customer": GRN}
+STATE_LABEL = {"waiting_on_you": "Waiting on you", "new": "New", "on_hold": "On hold",
+               "waiting_on_customer": "Waiting on customer"}
+
+
+def fit(text, width):
+    text = text or ""
+    return text[:width - 1] + "…" if len(text) > width else text.ljust(width)
+
+
+def header(name, colour, count):
+    return f"H\t-\t{colour}{BOLD}▌{name}{R} {DIM}{count}{R}"
+
+
+def rows(data, scope):
+    me = data.get("me")
+    issues = [i for i in data["issues"]
+              if scope == "all" or (i.get("assignee") or {}).get("id") == me]
+    groups = {}
+    for i in issues:
+        groups.setdefault(i.get("state") or "", []).append(i)
+    out = []
+    for state in sorted(groups, key=lambda s: (STATE_ORDER.get(s, 9), s)):
+        items = sorted(groups[state], key=lambda i: i.get("latest_message_time") or i.get("created_at") or "",
+                       reverse=True)
+        label = STATE_LABEL.get(state) or data.get("statuses", {}).get(state) or state
+        out.append(header(label, STATE_COLOUR.get(state, CYN), len(items)))
+        for i in items:
+            acct = data["accounts"].get((i.get("account") or {}).get("id"), "")
+            who = ((i.get("assignee") or {}).get("email") or "").split("@")[0]
+            mine = me and (i.get("assignee") or {}).get("id") == me
+            out.append("\t".join([
+                "I", i["id"],
+                f"{DIM}#{fit(str(i.get('number', '')), 5)}{R} {CYN}{fit(acct, 16)}{R} {fit(i.get('title'), 54)} "
+                f"{(BOLD if mine else DIM)}{fit(who or '—', 10)}{R} "
+                f"{DIM}{ago(i.get('latest_message_time') or i.get('created_at')):>4}{R}"]))
+    if not out:
+        out.append(f"H\t-\t{DIM}Inbox zero 🎉{R}")
+    return out
+
+# ---------------------------------------------------------------- picker state
+
+def get_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"scope": "all"}
+
+
+def put_state(st):
+    with open(STATE, "w") as f:
+        json.dump(st, f)
+
+
+def label(st):
+    return " Pylon · Open issues (everyone) " if st["scope"] == "all" else " Pylon · Assigned to me "
+
+
+def list_rows():
+    data = load()
+    if not data:
+        return [f"H\t-\t{DIM}Fetching from Pylon…{R}"]
+    return rows(data, get_state()["scope"])
+
+
+def on_scope():
+    st = get_state()
+    st["scope"] = "mine" if st["scope"] == "all" else "all"
+    put_state(st)
+    return f"reload({SELF} __list)+clear-query+first+change-border-label:{label(st)}"
+
+
+def target(issue):
+    return f"reply on Pylon issue #{issue.get('number')} ({issue.get('link')})"
+
+
+def point_outbox(issue_id):
+    """Set the outbox's `to:` to this issue, keep whatever body is there, open it."""
+    issue = find(load(), issue_id)
+    if not issue:
+        return 1
+    try:
+        with open(COMPOSE) as f:
+            lines = f.read().split("\n")
+    except OSError:
+        lines = []
+    if lines and lines[0] == "---" and "---" in lines[1:]:
+        end = lines.index("---", 1)
+        front = [l for l in lines[1:end] if not l.startswith("to:")]
+        body = lines[end + 1:]
+    else:
+        front, body = [], lines
+    os.makedirs(os.path.dirname(COMPOSE), exist_ok=True)
+    with open(COMPOSE, "w") as f:
+        f.write("\n".join(["---", f"to: {target(issue)}", *front, "---", *(body or ["", ""])]))
+    os.execv(os.path.join(BIN, "outbox"), ["outbox", "open"])
+
+
+def draft_with_claude(issue_id):
+    data = load()
+    issue = find(data, issue_id)
+    if not issue:
+        return 1
+    acct = data["accounts"].get((issue.get("account") or {}).get("id"), "")
+    prompt = (
+        f"Pylon issue #{issue.get('number')} from {acct or 'a customer'}: \"{issue.get('title')}\"\n"
+        f"{issue.get('link')} (issue id {issue['id']})\n\n"
+        "Read the full thread with the Pylon MCP tools (get_issue with include_messages), look up anything "
+        "you need, then draft my reply. Don't send anything. Write the draft to "
+        f"{COMPOSE} as:\n\n---\nto: {target(issue)}\n---\n\n<the reply, in markdown>\n\n"
+        "Then give me a two-line summary of the issue and what the draft says.")
+    r = subprocess.run([os.path.join(BIN, "to-claude")], input=prompt, text=True, capture_output=True)
+    if r.returncode != 0:
+        subprocess.run(["tmux", "display-message", "-d", "3000", f"pynav: {r.stderr.strip()}"])
+    return r.returncode
+
+
+def bg_refresh(force=False):
+    """Refresh the cache without blocking fzf; reload the list when done."""
+    data = load()
+    if not force and data and time.time() - data.get("fetched", 0) < TTL:
+        return
+    port = os.environ.get("FZF_PORT")
+    if os.fork():
+        return
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
+    try:
+        fetch()
+        if port:
+            req = urllib.request.Request(f"http://localhost:{port}", data=f"reload({SELF} __list)".encode(),
+                                         method="POST")
+            urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+    os._exit(0)
+
+
+def pick():
+    state = os.path.join(CACHE_DIR, f"state.{os.getpid()}.json")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    for old in os.listdir(CACHE_DIR):  # left behind by pickers that were killed
+        path = os.path.join(CACHE_DIR, old)
+        if old.startswith("state.") and time.time() - os.path.getmtime(path) > 86400:
+            os.remove(path)
+    global STATE
+    STATE = os.environ["PYNAV_STATE"] = state
+    st = {"scope": "all"}
+    put_state(st)
+    if not load():
+        print("Fetching from Pylon…", flush=True)
+        try:
+            fetch()
+        except Exception as e:
+            print(f"pynav: {e}")
+            time.sleep(4)
+            return 1
+    me = SELF
+    cmd = [
+        "fzf", "--ansi", "--reverse", "--no-sort", "--exact", "--prompt", "🔎 ",
+        "--border", "rounded", "--border-label", label(st),
+        "--delimiter", "\t", "--with-nth", "3..", "--listen",
+        "--preview", f"[ {{1}} = I ] && {me} __thread {{2}}",
+        "--preview-window", "down,60%,wrap,hidden",
+        "--footer", "enter reply · ctrl-d draft with Claude · ctrl-/ thread · ctrl-a everyone/mine · ctrl-o pylon · ctrl-y link · ctrl-r refresh",
+        "--bind", f"start:execute-silent({me} __bg)",
+        "--bind", f"enter:transform([ {{1}} = I ] && echo 'become({me} __reply {{2}})' || echo ignore)",
+        "--bind", f"ctrl-d:transform([ {{1}} = I ] && echo 'become({me} __draft {{2}})' || echo ignore)",
+        "--bind", "ctrl-/:toggle-preview",
+        "--bind", f"ctrl-a:transform({me} __scope)",
+        "--bind", f"ctrl-o:execute-silent(open \"$({me} __link {{2}})\")",
+        "--bind", f"ctrl-y:execute-silent({me} __link {{2}} | tr -d '\\n' | pbcopy)",
+        "--bind", f"ctrl-r:execute-silent({me} __bg --force)",
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
+    proc.communicate("\n".join(list_rows()) + "\n")
+    try:
+        os.remove(state)
+    except OSError:
+        pass
+    return proc.returncode
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "":
+        return pick()
+    if cmd == "fetch":
+        fetch()
+        return 0
+    if cmd == "__list":
+        sys.stdout.write("\n".join(list_rows()) + "\n")
+        return 0
+    if cmd == "__scope":
+        print(on_scope())
+        return 0
+    if cmd == "__thread":
+        show_thread(argv[2])
+        return 0
+    if cmd == "__link":
+        print((find(load(), argv[2]) or {}).get("link", ""))
+        return 0
+    if cmd == "__reply":
+        return point_outbox(argv[2])
+    if cmd == "__draft":
+        return draft_with_claude(argv[2])
+    if cmd == "__bg":
+        bg_refresh(force="--force" in argv)
+        return 0
+    print(__doc__)
+    return 0 if cmd in ("-h", "--help", "help") else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
