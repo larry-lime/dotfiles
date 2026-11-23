@@ -25,7 +25,7 @@ case "$1" in
     set-option -uw -t "$TMUX_PANE" @claude_attention \; \
     set-option -uw -t "$TMUX_PANE" @claude_done 2>/dev/null
   # Remember the folders this window's Claude session works in (most recent
-  # first, '|'-separated, max 8). snav (cmd+g) maps them to branches/stacks.
+  # first, '|'-separated, max 8). gnav (cmd+g) maps them to branches/stacks.
   cwd=$(jq -r '.cwd // empty' 2>/dev/null)
   if [ -n "$cwd" ]; then
     old=$(tmux show-options -wqv -t "$TMUX_PANE" @claude_cwds 2>/dev/null)

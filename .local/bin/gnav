@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""snav — stack picker for the current tmux window (Ghostty cmd+g → tmux prefix+B).
+"""gnav — stack picker for the current tmux window (Ghostty cmd+g → tmux prefix+B).
 
 Shows every stack / PR the window's Claude session is working on: the folders it
 worked in (recorded by `claude-notify --working` in @claude_cwds) plus the
 window's pane folders → worktree → branch → gh-stack stack (or a lone PR).
 
 Each PR row: draft/ready, review state, CI, needs-rebase / queued / merged.
-Opens instantly from ~/.cache/snav and refreshes from GitHub in the background.
+Opens instantly from ~/.cache/gnav and refreshes from GitHub in the background.
 
 Keys
   enter    open the PR on GitHub (on a stack header: the top PR)
@@ -28,7 +28,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha1
 
-CACHE_DIR = os.path.expanduser("~/.cache/snav")
+CACHE_DIR = os.path.expanduser("~/.cache/gnav")
 PR_CACHE = os.path.join(CACHE_DIR, "prs.json")
 SELF = os.path.realpath(__file__)
 TTL = 30
@@ -370,7 +370,7 @@ def pick(window):
 
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ""
-    window = os.environ.get("SNAV_WINDOW", "")
+    window = os.environ.get("GNAV_WINDOW", "")
     if not window.startswith("@"):  # unset or not expanded by tmux: the client's current window
         window = sh(["tmux", "display", "-p", "#{window_id}"])
     if cmd in ("", "pick"):
