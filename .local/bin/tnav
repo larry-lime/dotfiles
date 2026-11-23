@@ -32,8 +32,8 @@ FZF_POPUP_SIZE="40%,70%"
 # --border-label) are still set inline.
 FZF_BASE_OPTS=(--reverse --no-sort --prompt '🔎 ' --expect 'alt-enter,enter')
 
-# Sessions hidden from the Tnav Sessions picker (they have their own
-# bindings: prefix+a and prefix+t).
+# Sessions whose 📚 row is hidden from the Tnav Sessions picker (they have
+# their own bindings: prefix+a and prefix+t). Their windows still show.
 HIDDEN_SESSIONS=("🤖 Workspace Agent" "💻 Henry Terminal")
 
 # ============================================================================
@@ -84,9 +84,9 @@ tmux_entries() {
       }
       function status(a, d) { return a ? " 🔔" : (d ? " ✅" : "") }
       BEGIN { n = split(ENVIRON["HIDDEN"], h, "\n"); for (i = 1; i <= n; i++) hide[h[i]] = 1 }
-      $1 in hide { next }
       {
-        if (!($1 in seen)) { seen[$1] = 1; order[++ns] = $1 }
+        # Hidden sessions lose their 📚 row but keep their 🪟 window rows.
+        if (!($1 in seen)) { seen[$1] = 1; if (!($1 in hide)) order[++ns] = $1 }
         if ($4 != "") att[$1] = 1
         if ($5 != "") done[$1] = 1
         printf "%d\t1\t%06d\t%s:%s:%s\t🪟 %s › %s%s\n", rank($1), NR, $1, $2, $3, $1, $3, status($4 != "", $5 != "")
