@@ -8,17 +8,27 @@
 # Usage: claude-notify [message]
 # Env:   CLAUDE_NOTIFY_SOUND  system sound name (default Glass; empty = silent)
 
-# Modes:
-#   (default)    Stop hook: flag the window @claude_done (unless on screen)
+# Modes (one window state at a time; shown as a dot in the tmux status bar
+# and the tnav picker: yellow working, red needs you, green done):
+#   (default)    Stop hook: drop working, flag @claude_done (unless on screen)
+#   --working    Claude is busy (prompt submitted / tool ran): flag
+#                @claude_working, drop attention + done. No notification.
 #   --attention  Claude is blocked on you (permission prompt / question):
 #                flag @claude_attention, cleared once Claude resumes
-#   --clear      Claude resumed (prompt submitted / tool ran): drop the
-#                attention flag. No notification.
+#   --clear      Session ended: drop every flag. No notification.
 mode=done
 case "$1" in
 --attention) mode=attention; shift ;;
+--working)
+  [ -n "$TMUX_PANE" ] && tmux set-option -w -t "$TMUX_PANE" @claude_working "$(date +%s)" \; \
+    set-option -uw -t "$TMUX_PANE" @claude_attention \; \
+    set-option -uw -t "$TMUX_PANE" @claude_done 2>/dev/null
+  exit 0
+  ;;
 --clear)
-  [ -n "$TMUX_PANE" ] && tmux set-option -uw -t "$TMUX_PANE" @claude_attention 2>/dev/null
+  [ -n "$TMUX_PANE" ] && tmux set-option -uw -t "$TMUX_PANE" @claude_working \; \
+    set-option -uw -t "$TMUX_PANE" @claude_attention \; \
+    set-option -uw -t "$TMUX_PANE" @claude_done 2>/dev/null
   exit 0
   ;;
 esac
@@ -37,6 +47,7 @@ if [ -n "$TMUX_PANE" ] && command -v tmux >/dev/null 2>&1; then
   focused=$(tmux display-message -p -t "$TMUX_PANE" '#{window_active}#{session_attached}' 2>/dev/null)
   location=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I #W' 2>/dev/null)
 
+  tmux set-option -uw -t "$TMUX_PANE" @claude_working 2>/dev/null
   if [ "$mode" = attention ]; then
     # Set even when on screen: it stays until Claude actually resumes.
     tmux set-option -w -t "$TMUX_PANE" @claude_attention "$(date +%s)" 2>/dev/null
