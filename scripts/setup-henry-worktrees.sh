@@ -5,7 +5,11 @@
 #     dev/       <- main worktree (primary checkout, tracks origin/dev)
 #     main/      <- worktree, tracks origin/main
 #     staging/   <- worktree, tracks origin/staging
-#     alpha/ .. zeta/  <- scratch worktrees, local branches based off origin/dev
+#     alpha/ .. omega/ <- 24 persistent slots, detached at origin/dev when idle
+#
+# A slot is checked out on a branch only while that branch has an open PR
+# (yours or a teammate's). Temp worktrees (Claude Code's .claude/worktrees/*)
+# are separate and disposable: `wt gc` cleans them up.
 #
 # Idempotent. If ~/HenryLabs/henry is an existing plain clone, it is converted
 # in place (moved to become the dev/ worktree) — but only if fully clean,
@@ -19,8 +23,8 @@ set -uo pipefail
 REPO_URL="https://github.com/Henry-Social/henry"
 ROOT="$HOME/HenryLabs/henry"
 CORE_BRANCHES=(main staging)          # dev is the main worktree
-SCRATCH_BRANCHES=(alpha beta gamma delta epsilon zeta)
-BASE_BRANCH="dev"                     # scratch worktrees branch off this
+SLOTS=(alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega)
+BASE_BRANCH="dev"                     # idle slots sit detached at origin/$BASE_BRANCH
 
 info()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()    { printf '\033[1;32m ✓ \033[0m %s\n' "$*"; }
@@ -78,18 +82,24 @@ for b in "${CORE_BRANCHES[@]}"; do
   fi
 done
 
-# -------------------------------------------------
-# 3. Scratch worktrees (alpha..zeta, based off dev)
-# -------------------------------------------------
+# ----------------------------------------------------------
+# 3. Slot worktrees (alpha..omega, detached at origin/dev)
+# ----------------------------------------------------------
 
-info "Creating scratch worktrees off $BASE_BRANCH: ${SCRATCH_BRANCHES[*]}"
-for b in "${SCRATCH_BRANCHES[@]}"; do
-  if [[ -d "$ROOT/$b" ]]; then
-    ok "$b (exists)"
-  elif git -C "$DEV" show-ref --verify --quiet "refs/heads/$b"; then
-    git -C "$DEV" worktree add "$ROOT/$b" "$b" && ok "$b" || warn "$b failed"
+info "Creating slot worktrees (detached at origin/$BASE_BRANCH): ${SLOTS[*]}"
+for s in "${SLOTS[@]}"; do
+  if [[ -e "$ROOT/$s" ]]; then
+    ok "$s (exists)"
+    continue
+  fi
+  if git -C "$DEV" worktree add --detach "$ROOT/$s" "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+    if command -v bun >/dev/null 2>&1 && (cd "$ROOT/$s" && bun install --frozen-lockfile >/dev/null 2>&1); then
+      ok "$s (deps installed)"
+    else
+      ok "$s (run 'bun install --frozen-lockfile' in it before use)"
+    fi
   else
-    git -C "$DEV" worktree add -b "$b" "$ROOT/$b" "origin/$BASE_BRANCH" --no-track && ok "$b (new branch off origin/$BASE_BRANCH)" || warn "$b failed"
+    warn "$s failed"
   fi
 done
 

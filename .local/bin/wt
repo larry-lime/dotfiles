@@ -1,100 +1,310 @@
 #!/bin/zsh
+# wt — Henry worktree picker (cmd+t in Ghostty / prefix+W in tmux) and temp-worktree cleanup.
+#
+#   wt                 fzf picker: enter opens the worktree's tmux session
+#                        ctrl-x  delete the selected temp worktree
+#                        ctrl-g  run `wt gc` (asks before removing anything)
+#                        ⌫       on an empty query: detach the selected worktree from its branch
+#   wt gc [options]    remove temp worktrees that are safe to delete
+#       -n, --dry-run    show what would happen, change nothing
+#       -y, --yes        don't ask for confirmation
+#       --all            also remove temp worktrees whose branch has an open PR
+#       --force          also remove ones with uncommitted/unpushed work or a lock
+#                        (never one that's open in a tmux pane or your current dir)
+#   wt rm <path>       remove one temp worktree (asks first if it holds unsaved work)
+#   wt ls              print the classified list without fzf
+#
+# Every worktree is classified by its path:
+#   slot   ~/HenryLabs/henry/<greek letter>       persistent; wt never deletes these
+#   base   ~/HenryLabs/henry/{dev,main,staging}   long-lived branch checkouts
+#   temp   */.claude/worktrees/* or a tmp dir     disposable (Claude Code / agents)
+#   other  anything else                          shown, never deleted
+#
+# Removing a worktree never deletes its branch, except a leftover `worktree-*`
+# branch whose commits are all on a remote already.
 
-# Git Worktree Switcher for tmux
-# Backspace on an empty query detaches the selected worktree from its branch.
+setopt extended_glob
 
-list_worktrees() {
-    git -C "$1" worktree list --porcelain | awk '
-    /^worktree /{wt_full_path=$2; wt_display_name=$2; branch_name=""; next}
-    /^branch /{branch_name=$2; sub("refs/heads/","",branch_name); next}
-    /^detached/{branch_name="(detached)"; next}
-    /^bare/{branch_name="(bare)"; next}
-    /^$/{
-        if (wt_full_path!=""){
-            b=(branch_name=="" ? "(no-branch)" : branch_name);
-            sub(".*/", "", wt_display_name); # Extract basename for display
-            print wt_full_path "\t" wt_display_name "\t" b;
-            wt_full_path=""; wt_display_name=""; branch_name=""
-        }
-        next
-    }
-    END{
-        if (wt_full_path!=""){
-            b=(branch_name=="" ? "(no-branch)" : branch_name);
-            sub(".*/", "", wt_display_name);
-            print wt_full_path "\t" wt_display_name "\t" b;
-        }
-    }
-'
+ROOT=${WT_ROOT:-$HOME/HenryLabs/henry}
+GREEK=(alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega)
+GLYPH=(α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω)
+BASES=(dev main staging)
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/wt
+PR_CACHE=$CACHE_DIR/prs.tsv
+PR_TTL=300 # seconds before the picker refreshes open PRs in the background
+SELF=${0:A}
+
+usage() { sed -n '2,25p' "$SELF" | sed 's/^# \{0,1\}//' }
+
+# ---------------------------------------------------------------- classification
+
+kind_of() {
+  local p=$1
+  case $p in
+    */.claude/worktrees/*|/private/tmp/*|/tmp/*|/private/var/folders/*) print temp; return ;;
+  esac
+  if [[ ${p:h} == $ROOT ]]; then
+    (( ${GREEK[(Ie)${p:t}]} )) && { print slot; return }
+    (( ${BASES[(Ie)${p:t}]} )) && { print base; return }
+  fi
+  print other
 }
 
-# Used by fzf's reload binding
-if [[ "$1" == "--list" ]]; then
-    list_worktrees "$2"
-    exit
-fi
+# Find a git checkout to anchor on: cwd, its subdirs (when run from the parent
+# folder), then the Henry repo itself.
+find_repo() {
+  local d
+  for d in "$PWD" "$PWD"/*(N/) "$ROOT/dev" "$ROOT"/*(N/); do
+    git -C "$d" rev-parse --is-inside-work-tree &>/dev/null && { print -r -- "$d"; return 0 }
+  done
+  return 1
+}
 
-# Find a git worktree to anchor against. Prefer the current dir, but fall back to any
-# immediate subdirectory (useful when the cwd is a parent folder holding multiple worktrees).
-REPO_DIR=""
-if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    REPO_DIR="$PWD"
-else
-    for dir in "$PWD"/*; do
-        [[ -d "$dir" ]] || continue
-        if git -C "$dir" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-            REPO_DIR="$dir"
-            break
+# One line per worktree: path \t branch|(detached) \t locked|prunable|""
+worktrees() {
+  git -C "$1" worktree list --porcelain | awk '
+    function flush() { if (p != "") print p "\t" (b == "" ? "(detached)" : b) "\t" l; p = ""; b = ""; l = "" }
+    /^worktree / { flush(); p = substr($0, 10); next }
+    /^branch /   { b = $2; sub("refs/heads/", "", b); next }
+    /^locked/    { l = "locked"; next }
+    /^prunable/  { l = "prunable"; next }
+    END { flush() }'
+}
+
+# ---------------------------------------------------------------- open PRs (cached)
+
+typeset -gA PR_NUM PR_STATE PR_AUTHOR
+ME=""
+
+refresh_prs() { # repo
+  mkdir -p "$CACHE_DIR"
+  local tmp=$PR_CACHE.$$
+  if (cd "$1" && gh pr list --state open --limit 1000 --json number,headRefName,isDraft,author \
+        --jq '.[] | [.headRefName, (.number|tostring), (if .isDraft then "draft" else "open" end), .author.login] | @tsv') \
+        > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$PR_CACHE"
+  else
+    rm -f "$tmp"; return 1
+  fi
+  [[ -s $CACHE_DIR/me ]] || (cd "$1" && gh api user --jq .login > "$CACHE_DIR/me" 2>/dev/null)
+  return 0
+}
+
+load_prs() {
+  local b n s a
+  PR_NUM=() PR_STATE=() PR_AUTHOR=()
+  if [[ -r $PR_CACHE ]]; then
+    while IFS=$'\t' read -r b n s a; do PR_NUM[$b]=$n PR_STATE[$b]=$s PR_AUTHOR[$b]=$a; done < "$PR_CACHE"
+  fi
+  [[ -r $CACHE_DIR/me ]] && ME=$(<"$CACHE_DIR/me")
+}
+
+# Picker: use the cache, refresh it in the background when stale.
+ensure_prs() { # repo
+  if [[ ! -s $PR_CACHE ]]; then
+    refresh_prs "$1"
+  elif (( $(date +%s) - $(stat -f %m "$PR_CACHE") > PR_TTL )); then
+    refresh_prs "$1" &>/dev/null &!
+  fi
+  load_prs
+}
+
+pr_label() { # branch
+  local b=$1 out=""
+  [[ -n ${PR_NUM[$b]} ]] || return
+  out="#${PR_NUM[$b]}"
+  [[ ${PR_STATE[$b]} == draft ]] && out+=" draft"
+  [[ -n $ME && ${PR_AUTHOR[$b]} != $ME ]] && out+=" @${PR_AUTHOR[$b]}"
+  print -r -- "$out"
+}
+
+# ---------------------------------------------------------------- picker list
+
+# Lines of "path \t display": slots in alphabet order, then base, other, temp.
+render() { # repo
+  local p b l k name idx pr label
+  worktrees "$1" | while IFS=$'\t' read -r p b l; do
+    [[ $l == prunable ]] && continue
+    k=$(kind_of "$p"); name=${p:t}; pr=$(pr_label "$b")
+    case $k in
+      slot)
+        idx=${GREEK[(Ie)$name]}
+        if [[ $b == "(detached)" ]]; then
+          label=$'\e[2midle\e[0m'
+        elif [[ -n $pr ]]; then
+          label="$b  "$'\e[32m'"$pr"$'\e[0m'
+        else
+          label="$b  "$'\e[31m'"no PR"$'\e[0m'
         fi
-    done
-fi
+        printf '1%02d\t%s\t\e[1;36m%s %-8s\e[0m %s\n' $idx "$p" "${GLYPH[$idx]}" "$name" "$label" ;;
+      base)
+        printf '2%s\t%s\t\e[1;34m◆ %-8s\e[0m %s\n' "$name" "$p" "$name" "$b" ;;
+      other)
+        printf '3%s\t%s\t\e[1m· %-8s\e[0m %s  %s\n' "$name" "$p" "$name" "$b" "$pr" ;;
+      temp)
+        printf '4%s\t%s\t\e[2;33m⏳ %s\e[0m \e[2m%s  %s%s\e[0m\n' "$name" "$p" "$name" "$b" "$pr" "${l:+ [$l]}" ;;
+    esac
+  done | sort | cut -f2-
+}
 
-if [[ -z "$REPO_DIR" ]]; then
-    echo "Error: Not in a git repository and no worktrees found"
-    sleep 1
-    exit 1
-fi
+# ---------------------------------------------------------------- tmux sessions
 
-# Get all worktrees with branch names
-worktrees=$(list_worktrees "$REPO_DIR")
+session_name_for() { # path
+  local p=$1 name=${1:t}
+  case $(kind_of "$p") in
+    slot) name="${GLYPH[${GREEK[(Ie)$name]}]} $name" ;;
+    temp) name="⏳ $name" ;;
+  esac
+  print -r -- "${name//[.:]/_}"
+}
 
-if [[ -z "$worktrees" ]]; then
-    echo "No worktrees found"
-    sleep 1
-    exit 1
-fi
+# Sessions rooted at a path (or inside it). Matched by path, not name, because
+# prefix+p renames sessions with a priority emoji.
+sessions_at() { # path
+  tmux list-sessions -F '#{session_id}'$'\t''#{session_path}' 2>/dev/null |
+    awk -F'\t' -v p="$1" '$2 == p || index($2, p "/") == 1 { print $1 }'
+}
 
-# Use plain fzf (we're already in a popup)
-selected=$(echo "$worktrees" |
-    fzf \
-        --reverse \
-        --prompt="Worktree > " \
-        --header="Select worktree · ⌫ on empty query: detach branch" \
-        --delimiter="\t" \
-        --with-nth=2,3 \
-        --bind "bspace:transform:[[ -z {q} ]] && echo 'execute-silent(git -C {1} switch --detach)+reload(${(q)0:A} --list ${(q)REPO_DIR})' || echo backward-delete-char" )
+open_session() { # path
+  local p=$1 sid name base n=2
+  sid=$(tmux list-sessions -F '#{session_id}'$'\t''#{session_path}' 2>/dev/null |
+    awk -F'\t' -v p="$p" '$2 == p { print $1; exit }')
+  if [[ -z $sid ]]; then
+    name=$(session_name_for "$p"); base=$name
+    while tmux has-session -t "=$name" 2>/dev/null; do name="$base-$n"; (( n++ )); done
+    sid=$(tmux new-session -d -P -F '#{session_id}' -s "$name" -c "$p")
+  fi
+  if [[ -n $TMUX ]]; then tmux switch-client -t "$sid"; else tmux attach-session -t "$sid"; fi
+}
 
-fzf_status=$?
+# ---------------------------------------------------------------- safety checks
 
-# Exit quietly if picker was cancelled
-if [[ $fzf_status -ne 0 || -z "$selected" ]]; then
-    exit 0
-fi
+# Fills HARD (never remove), SOFT (remove only with --force) and KEEP (open PR).
+assess() { # path branch lock
+  local p=$1 b=$2 l=$3 n
+  HARD=() SOFT=() KEEP=()
+  [[ $PWD == $p || $PWD == $p/* ]] && HARD+=("your current directory")
+  tmux list-panes -a -F '#{pane_current_path}' 2>/dev/null |
+    awk -v p="$p" '$0 == p || index($0, p "/") == 1 { f = 1 } END { exit !f }' &&
+    HARD+=("open in a tmux pane")
+  [[ $l == locked ]] && SOFT+=("locked")
+  [[ -n $(git -C "$p" status --porcelain 2>/dev/null | head -1) ]] && SOFT+=("uncommitted changes")
+  n=$(git -C "$p" rev-list --count HEAD --not --remotes 2>/dev/null)
+  (( n > 0 )) && SOFT+=("$n unpushed commit(s)")
+  [[ -n ${PR_NUM[$b]} ]] && KEEP+=("open PR #${PR_NUM[$b]}")
+}
 
-selected_path=$(echo "$selected" | cut -f1)
+remove_wt() { # repo path branch force(0|1)
+  local repo=$1 p=$2 b=$3 force=$4 sid err
+  local -a f
+  (( force )) && f=(--force --force)
+  for sid in ${(f)"$(sessions_at "$p")"}; do tmux kill-session -t "$sid" 2>/dev/null; done
+  if err=$(git -C "$repo" worktree remove $f "$p" 2>&1); then
+    print "  removed  ${p:t}"
+    if [[ $b == worktree-* ]] && (( $(git -C "$repo" rev-list --count "$b" --not --remotes 2>/dev/null || print 1) == 0 )); then
+      git -C "$repo" branch -D -q "$b" && print "  deleted  branch $b (nothing unpushed)"
+    fi
+  else
+    print "  ! could not remove ${p:t}: ${err%%$'\n'*}"
+  fi
+}
 
-# Derive a tmux-safe session name from the worktree directory basename
-session_name=$(basename "$selected_path" | tr '.: ' '___')
+# ---------------------------------------------------------------- commands
 
-# Create the session (rooted at the worktree) if it doesn't already exist
-if ! tmux has-session -t "=$session_name" 2>/dev/null; then
-    tmux new-session -d -s "$session_name" -c "$selected_path"
-fi
+cmd_gc() {
+  local dry=0 yes=0 all=0 force=0 a repo p b l i
+  for a; do
+    case $a in
+      -n|--dry-run) dry=1 ;;
+      -y|--yes) yes=1 ;;
+      --all) all=1 ;;
+      --force) force=1 ;;
+      -h|--help) usage; return 0 ;;
+      *) print -u2 "wt gc: unknown option $a"; return 2 ;;
+    esac
+  done
+  repo=$(find_repo) || { print -u2 "wt: no git repo found"; return 1 }
 
-# Switch to it (or attach if we're somehow outside tmux)
-if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "=$session_name"
-else
-    tmux attach-session -t "=$session_name"
-fi
+  print "==> refreshing open PRs"
+  refresh_prs "$repo" || print -u2 "  ! couldn't reach GitHub; using the cached PR list"
+  load_prs
+  git -C "$repo" worktree prune
 
+  local -a rm_paths rm_branches rm_force reasons
+  print "==> temp worktrees"
+  while IFS=$'\t' read -r p b l; do
+    [[ $(kind_of "$p") == temp && -d $p ]] || continue
+    assess "$p" "$b" "$l"
+    if (( ${#HARD} )); then
+      printf '  \e[32mkeep\e[0m    %-34s %s\n' "${p:t}" "${(j:, :)HARD}"
+    elif (( ${#KEEP} && !all )); then
+      printf '  \e[32mkeep\e[0m    %-34s %s\n' "${p:t}" "${(j:, :)KEEP}"
+    elif (( ${#SOFT} && !force )); then
+      printf '  \e[33mkeep\e[0m    %-34s %s (use --force)\n' "${p:t}" "${(j:, :)SOFT}"
+    else
+      reasons=("${SOFT[@]}" "${KEEP[@]}"); (( ${#reasons} )) || reasons=(clean)
+      printf '  \e[31mremove\e[0m  %-34s %s\n' "${p:t}" "${(j:, :)reasons}"
+      rm_paths+=("$p"); rm_branches+=("$b"); rm_force+=($(( ${#SOFT} > 0 )))
+    fi
+  done < <(worktrees "$repo")
+
+  if (( ! ${#rm_paths} )); then print "Nothing to remove."; return 0; fi
+  if (( dry )); then print "Dry run: nothing removed."; return 0; fi
+  if (( ! yes )); then
+    read -q "?Remove ${#rm_paths} worktree(s)? Branches are kept. [y/N] " || { print; return 1 }
+    print
+  fi
+  for i in {1..${#rm_paths}}; do remove_wt "$repo" "${rm_paths[i]}" "${rm_branches[i]}" "${rm_force[i]}"; done
+  git -C "$repo" worktree prune
+}
+
+cmd_rm() {
+  local p=${1:A} repo b l line found=""
+  local -a reasons
+  [[ -n $1 ]] || { print -u2 "usage: wt rm <path>"; return 2 }
+  repo=$(find_repo) || { print -u2 "wt: no git repo found"; return 1 }
+  while IFS=$'\t' read -r line b l; do [[ $line == $p ]] && { found=1; break }; done < <(worktrees "$repo")
+  [[ -n $found ]] || { print "wt: $p is not a worktree"; sleep 1.5; return 1 }
+  if [[ $(kind_of "$p") != temp ]]; then
+    print "wt: ${p:t} is a $(kind_of "$p") worktree. wt only deletes temp worktrees."
+    sleep 1.5; return 1
+  fi
+  load_prs
+  assess "$p" "$b" "$l"
+  if (( ${#HARD} )); then print "wt: not removing ${p:t}: ${(j:, :)HARD}"; sleep 1.5; return 1; fi
+  reasons=("${SOFT[@]}" "${KEEP[@]}")
+  if (( ${#reasons} )); then
+    print "${p:t}: ${(j:, :)reasons}"
+    read -q "?Remove anyway? The branch is kept. [y/N] " || { print; return 1 }
+    print
+  fi
+  remove_wt "$repo" "$p" "$b" $(( ${#SOFT} > 0 ))
+  sleep 0.5
+}
+
+cmd_pick() {
+  local repo sel
+  repo=$(find_repo) || { print "Error: not in a git repository and no worktrees found"; sleep 1; exit 1 }
+  ensure_prs "$repo"
+  local reload="reload(${(q)SELF} __list ${(q)repo})"
+  sel=$(render "$repo" | fzf \
+    --ansi --reverse \
+    --prompt="Worktree > " \
+    --header="enter open · ctrl-x delete temp · ctrl-g gc temp · ⌫ (empty) detach" \
+    --delimiter=$'\t' --with-nth=2 \
+    --bind "ctrl-x:execute(${(q)SELF} rm {1})+$reload" \
+    --bind "ctrl-g:execute(${(q)SELF} gc)+$reload" \
+    --bind "bspace:transform:[[ -z {q} ]] && echo 'execute-silent(git -C {1} switch --detach)+$reload' || echo backward-delete-char")
+  [[ $? -eq 0 && -n $sel ]] || exit 0
+  open_session "${sel%%$'\t'*}"
+}
+
+case $1 in
+  "") cmd_pick ;;
+  gc) shift; cmd_gc "$@" ;;
+  rm) shift; cmd_rm "$@" ;;
+  ls) repo=$(find_repo) || exit 1; ensure_prs "$repo"; render "$repo" | cut -f2 ;;
+  __list) load_prs; render "$2" ;;
+  -h|--help|help) usage ;;
+  *) usage; exit 2 ;;
+esac

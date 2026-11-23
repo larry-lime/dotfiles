@@ -132,6 +132,14 @@ link "$DOTFILES/zsh"         "$HOME/.config/zsh"
 link "$DOTFILES/ghostty"     "$HOME/.config/ghostty"
 link "$DOTFILES/.local/bin"  "$HOME/.local/bin"
 
+# User-level Claude Code skills (available in every project)
+mkdir -p "$HOME/.claude/skills"
+for skill in "$DOTFILES"/claude/skills/*/; do
+  [[ -d "$skill" ]] || continue
+  skill="${skill%/}"
+  link "$skill" "$HOME/.claude/skills/$(basename "$skill")"
+done
+
 # ---------------
 # 5. Zsh plugins
 # ---------------
@@ -208,7 +216,7 @@ fi
 # ------------------------------
 
 if $INSTALL_HENRY; then
-  info "Setting up ~/HenryLabs/henry worktrees (dev, main, staging, alpha..zeta)"
+  info "Setting up ~/HenryLabs/henry worktrees (dev, main, staging, alpha..omega)"
   if git ls-remote https://github.com/Henry-Social/henry >/dev/null 2>&1; then
     /bin/bash "$DOTFILES/scripts/setup-henry-worktrees.sh" || warn "henry worktree setup had issues — re-run scripts/setup-henry-worktrees.sh"
   else

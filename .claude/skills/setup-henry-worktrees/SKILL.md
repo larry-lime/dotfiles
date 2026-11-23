@@ -1,6 +1,6 @@
 ---
 name: setup-henry-worktrees
-description: Set up or repair the Henry work repo worktree layout at ~/HenryLabs/henry (dev, main, staging, alpha–zeta). Use when the user mentions setting up henry, work repo worktrees, or wt showing missing worktrees.
+description: Set up or repair the Henry work repo worktree layout at ~/HenryLabs/henry (dev, main, staging, alpha–omega). Use when the user mentions setting up henry, work repo worktrees, or wt showing missing worktrees.
 ---
 
 # Henry worktree layout
@@ -12,8 +12,8 @@ Target layout, produced by `~/.dotfiles/scripts/setup-henry-worktrees.sh` (idemp
   dev/       main worktree — the actual clone, tracks origin/dev
   main/      linked worktree, tracks origin/main
   staging/   linked worktree, tracks origin/staging
-  alpha/ beta/ gamma/ delta/ epsilon/ zeta/
-             scratch worktrees — local branches (no upstream) based off origin/dev
+  alpha/ … omega/
+             24 persistent slots — detached at origin/dev when idle
 ```
 
 ## Running it
@@ -28,10 +28,8 @@ Target layout, produced by `~/.dotfiles/scripts/setup-henry-worktrees.sh` (idemp
 
 ## How it's used
 
-- `wt` (`~/.local/bin/wt`, bound to `prefix+W` in tmux / `cmd+t` in Ghostty) lists all worktrees via fzf and switches to a tmux session rooted at the chosen one. Run from any worktree or from `~/HenryLabs/henry` itself (it scans subdirs when the cwd isn't a worktree).
-- Branch promotion flow (zsh `ghpr` function): feature → preview → staging → main.
-- Scratch worktrees (alpha–zeta) are for parallel feature work; reset one with
-  `git -C ~/HenryLabs/henry/alpha fetch origin && git -C ~/HenryLabs/henry/alpha reset --hard origin/dev` (confirm with the user first — this discards work).
+- `wt` (`~/.local/bin/wt`, bound to `prefix+W` in tmux / `cmd+t` in Ghostty) lists all worktrees via fzf, grouped as slots / base / temp (`⏳`), and switches to a tmux session rooted at the chosen one. `wt gc` cleans up disposable Claude Code worktrees.
+- How slots and temp worktrees are used day to day (the "slot is on a branch only while it has an open PR" rule, picking/freeing slots, `wt gc` flags) is in the user-level `henry-worktrees` skill: `claude/skills/henry-worktrees/SKILL.md`, linked into `~/.claude/skills` by `install.sh`.
 
 ## Repair notes
 

@@ -47,10 +47,10 @@ The installer verifies the prefix and installs all of the above. The **right opt
   dev/       main worktree, tracks origin/dev
   main/      tracks origin/main
   staging/   tracks origin/staging
-  alpha/ … zeta/   scratch worktrees, local branches off origin/dev
+  alpha/ … omega/  24 persistent slots, detached at origin/dev when idle
 ```
 
-It's idempotent: an existing plain clone at `~/HenryLabs/henry` is converted in place (only if fully clean — it aborts rather than lose anything), existing worktrees are left alone. `wt` (`cmd+t` in Ghostty) switches between them as tmux sessions from anywhere in the tree.
+It's idempotent: an existing plain clone at `~/HenryLabs/henry` is converted in place (only if fully clean — it aborts rather than lose anything), existing worktrees are left alone. `wt` (`cmd+t` in Ghostty) switches between them as tmux sessions from anywhere in the tree. It groups slots (`α alpha`, with branch and PR), base checkouts, and Claude Code's disposable worktrees (`⏳`, dimmed, last). `wt gc` removes temp worktrees that are clean, pushed and have no open PR (`--dry-run`, `--all`, `--force`); `ctrl-x` / `ctrl-g` do the same from the picker.
 
 ## Font
 
